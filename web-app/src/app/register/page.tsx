@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import OtpCodeInput from '@/components/OtpCodeInput';
 import styles from './register.module.css';
 
 type Role = 'STUDENT' | 'EMPLOYER';
@@ -14,11 +14,10 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [stage, setStage] = useState<'details' | 'verify'>('details');
+  const [stage, setStage] = useState<'details' | 'verify' | 'success'>('details');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const isStudent = role === 'STUDENT';
 
   const changeRole = (nextRole: Role) => {
@@ -27,6 +26,8 @@ export default function RegisterPage() {
     setName('');
     setEmail('');
     setPassword('');
+    setStage('details');
+    setCode('');
     setError('');
     setNotice('');
   };
@@ -57,6 +58,7 @@ export default function RegisterPage() {
         company_name: isStudent ? null : name.trim(),
       });
       setStage('verify');
+      setCode('');
       setNotice('Mã OTP đã được gửi đến email. Mã có hiệu lực trong 10 phút.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi');
@@ -71,8 +73,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await post('/api/auth/register/verify', { email: email.trim().toLowerCase(), code: code.trim() });
-      window.alert('Email đã được xác nhận. Hãy đăng nhập để tiếp tục.');
-      router.push('/login');
+      setStage('success');
+      setNotice('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Mã OTP không hợp lệ');
     } finally {
@@ -90,10 +92,10 @@ export default function RegisterPage() {
 
         <header className={styles.header}>
           <span className={styles.eyebrow}>THAM GIA EDUSHIFT</span>
-          <h1 id="register-title">{stage === 'details' ? 'Tạo tài khoản' : 'Xác nhận email'}</h1>
+          <h1 id="register-title">{stage === 'details' ? 'Tạo tài khoản' : stage === 'verify' ? 'Xác nhận email' : 'Tài khoản đã sẵn sàng'}</h1>
           <p>{stage === 'details'
             ? 'Bắt đầu tìm ca làm phù hợp với lịch học của bạn.'
-            : 'Nhập mã 6 số đã gửi tới ' + email + '.'}</p>
+            : stage === 'verify' ? 'Nhập mã 6 số đã gửi tới ' + email + '.' : 'Email của bạn đã được xác nhận thành công.'}</p>
         </header>
 
         {stage === 'details' && <div className={styles.roleSwitch} role="group" aria-label="Loại tài khoản">
@@ -118,7 +120,14 @@ export default function RegisterPage() {
         {notice && <div className={styles.notice} role="status">{notice}</div>}
         {error && <div className={styles.error} role="alert">{error}</div>}
 
-        <form className={styles.form} onSubmit={stage === 'details' ? requestCode : verifyCode}>
+        {stage === 'success' ? <div className={styles.successPanel} role="status">
+          <span className={styles.successIcon} aria-hidden="true">✓</span>
+          <h2>Đăng ký thành công</h2>
+          <p>{isStudent
+            ? 'Bạn có thể đăng nhập và bắt đầu tìm ca làm phù hợp với lịch học.'
+            : 'Bạn có thể đăng nhập. Tài khoản doanh nghiệp cần được quản trị viên duyệt trước khi đăng ca.'}</p>
+          <Link className={styles.successLink} href="/login">Đi đến đăng nhập</Link>
+        </div> : <form className={styles.form} onSubmit={stage === 'details' ? requestCode : verifyCode}>
           {stage === 'details' ? <>
           <div className={styles.field}>
             <label htmlFor="register-name">{isStudent ? 'Họ và tên' : 'Tên doanh nghiệp'}</label>
@@ -162,12 +171,7 @@ export default function RegisterPage() {
               required
             />
           </div>
-          </> : <div className={styles.field}>
-            <label htmlFor="register-code">Mã OTP</label>
-            <input id="register-code" type="text" inputMode="numeric" autoComplete="one-time-code"
-              pattern="[0-9]{6}" maxLength={6} placeholder="6 chữ số" value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} required />
-          </div>}
+          </> : <OtpCodeInput id="register-code" value={code} onChange={setCode} disabled={loading} />}
           <button className={styles.submit} type="submit" disabled={loading}>
             {loading ? 'Đang xử lý...' : stage === 'details' ? 'Gửi mã xác nhận' : 'Xác nhận và tạo tài khoản'}
           </button>
@@ -177,9 +181,9 @@ export default function RegisterPage() {
             <button type="button" className={styles.textButton} disabled={loading}
               onClick={() => { void requestCode(); }}>Gửi lại mã</button>
           </div>}
-        </form>
+        </form>}
 
-        <p className={styles.footer}>Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>
+        {stage !== 'success' && <p className={styles.footer}>Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>}
       </section>
     </main>
   );

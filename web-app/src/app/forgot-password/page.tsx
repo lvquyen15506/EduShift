@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import OtpCodeInput from '@/components/OtpCodeInput';
 import styles from '../register/register.module.css';
 
 export default function ForgotPasswordPage() {
@@ -35,7 +36,7 @@ export default function ForgotPasswordPage() {
     event.preventDefault(); setError(''); setLoading(true);
     try {
       await post('/api/auth/password-reset/confirm', { email: email.trim().toLowerCase(), code, new_password: password });
-      setStage('done'); setNotice('Đã đổi mật khẩu. Bạn có thể đăng nhập.');
+      setStage('done'); setNotice('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Mã OTP không hợp lệ'); }
     finally { setLoading(false); }
   }
@@ -48,12 +49,17 @@ export default function ForgotPasswordPage() {
     {error && <div className={styles.error} role="alert">{error}</div>}
     {stage !== 'done' && <form className={styles.form} onSubmit={stage === 'request' ? requestCode : confirm}>
       {stage === 'request' ? <div className={styles.field}><label htmlFor="reset-email">Email</label><input id="reset-email" type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></div> : <>
-        <div className={styles.field}><label htmlFor="reset-code">Mã OTP</label><input id="reset-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} required /></div>
+        <OtpCodeInput id="reset-code" value={code} onChange={setCode} disabled={loading} />
         <div className={styles.field}><label htmlFor="reset-password">Mật khẩu mới</label><input id="reset-password" type="password" autoComplete="new-password" minLength={6} value={password} onChange={event => setPassword(event.target.value)} required /></div>
       </>}
       <button className={styles.submit} type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : stage === 'request' ? 'Gửi mã xác nhận' : 'Đổi mật khẩu'}</button>
       {stage === 'confirm' && <div className={styles.otpActions}><button type="button" className={styles.textButton} disabled={loading} onClick={() => { setStage('request'); setError(''); setNotice(''); }}>Sửa email</button><button type="button" className={styles.textButton} disabled={loading} onClick={() => { void requestCode(); }}>Gửi lại mã</button></div>}
     </form>}
-    <p className={styles.footer}><Link href="/login">Quay lại đăng nhập</Link></p>
+    {stage === 'done' ? <div className={styles.successPanel} role="status">
+      <span className={styles.successIcon} aria-hidden="true">✓</span>
+      <h2>Đổi mật khẩu thành công</h2>
+      <p>Mật khẩu mới đã được lưu. Bạn có thể đăng nhập để tiếp tục.</p>
+      <Link className={styles.successLink} href="/login">Đi đến đăng nhập</Link>
+    </div> : <p className={styles.footer}><Link href="/login">Quay lại đăng nhập</Link></p>}
   </section></main>;
 }
