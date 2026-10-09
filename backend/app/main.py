@@ -607,6 +607,44 @@ def list_shifts(status_filter: Optional[str] = Query(default=None, alias='status
     if status_filter: query = query.filter(models.JobShift.status == status_filter.upper())
     return [shift_dict(s) for s in query.all()]
 
+@app.get('/api/public/shifts')
+def public_shifts(
+    limit: int = Query(default=6, ge=1, le=24),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Return the safe, public subset of currently recruitable shifts."""
+    now = datetime.utcnow()
+    query = (
+        db.query(models.JobShift)
+        .join(models.JobShift.employer)
+        .options(joinedload(models.JobShift.employer), joinedload(models.JobShift.applications))
+        .filter(
+            models.JobShift.status == 'OPEN',
+            models.JobShift.start_time > now,
+            models.Employer.is_verified.is_(True),
+        )
+        .order_by(models.JobShift.start_time.asc(), models.JobShift.created_at.desc())
+    )
+    total = query.count()
+    shifts = query.offset(offset).limit(limit).all()
+    items = []
+    for shift in shifts:
+        accepted = sum(1 for application in shift.applications if application.status == 'ACCEPTED')
+        remaining = max(shift.required_workers - accepted, 0)
+        items.append({
+            'id': shift.id,
+            'title': shift.title,
+            'company_name': shift.employer.company_name,
+            'location': shift.location,
+            'start_time': shift.start_time.replace(tzinfo=timezone.utc),
+            'end_time': shift.end_time.replace(tzinfo=timezone.utc),
+            'hourly_rate': shift.hourly_rate,
+            'required_workers': shift.required_workers,
+            'remaining_workers': remaining,
+        })
+    return {'items': items, 'total': total, 'limit': limit, 'offset': offset}
+
 @app.post('/api/shifts', status_code=201)
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
     if user.role != 'EMPLOYER' or not user.employer_profile: raise HTTPException(403, 'Chỉ doanh nghiệp mới được tạo ca')

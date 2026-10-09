@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import LandingMotion from './landing-motion';
 import LandingSlider from './landing-slider';
+import PublicShifts from './public-shifts';
 
 const steps = [
   { n: '01', title: 'Đồng bộ lịch học', body: 'Đưa thời khóa biểu vào EduShift để thấy rõ những khoảng thời gian bạn có thể đi làm.' },
@@ -41,6 +42,8 @@ export default function Home() {
       </div>
       <div className="landing-hero-band"><span>HỌC HẾT MÌNH</span><b>✳</b><span>LÀM ĐÚNG LÚC</span><b>✳</b><span>CHỦ ĐỘNG MỖI NGÀY</span></div>
     </section>
+
+    <PublicShifts />
 
     <section className="landing-section landing-intro" id="loi-ich">
       <div className="landing-section-head landing-reveal"><div><span className="landing-label">MỌI THỨ TRONG MỘT NƠI</span><h2>Để lịch học dẫn đường<br />cho công việc phù hợp.</h2></div><p>Không cần tự dò từng ca rồi so lại thời khóa biểu. EduShift đưa lịch học, cơ hội việc làm và ca đã nhận về cùng một chỗ.</p></div>
