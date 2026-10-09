@@ -76,6 +76,8 @@ Kết quả phase 8: 14 test API đạt trên PostgreSQL; web lint/build, mobile
 
 Kết quả cục bộ phase 9: 15 test API đạt trên PostgreSQL; web lint/build, mobile typecheck/lint, Expo Doctor 21/21 và export Android đạt. Test worker bao gồm gửi thành công, retry và nội dung push không chứa chi tiết riêng tư. Chưa có bằng chứng EAS cloud build, TestFlight, push trên máy thật hoặc tải 1.000 người dùng đồng thời; phase 9 chưa thể đánh dấu hoàn thành.
 
+CI commit `c61016e` trên `dev` đã đạt cả API và web sau khi chuyển PostgreSQL test sang runner Ubuntu. Checklist nghiệm thu và điều kiện phát hành ở [docs/Release_Acceptance.md](docs/Release_Acceptance.md).
+
 ## Giai đoạn 10 — nghiệm thu toàn hệ thống
 
 1. [ ] Chạy lại toàn bộ test API, web, mobile và luồng đầu cuối trên môi trường phát hành.
