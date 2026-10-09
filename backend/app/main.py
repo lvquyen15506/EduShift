@@ -80,7 +80,9 @@ ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 app = FastAPI(title='EduShift API', version='1.0.0', description='API kết nối việc làm part-time theo lịch học')
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+cors_origins = [origin.strip() for origin in os.getenv('CORS_ORIGINS', '*').split(',') if origin.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_credentials=False,
+                   allow_methods=['*'], allow_headers=['*'])
 
 class RegisterRequest(BaseModel):
     username: Optional[str] = None

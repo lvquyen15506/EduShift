@@ -12,10 +12,10 @@ Sau khi merge vào `main` và CI đạt, workflow đẩy hai image lên GHCR:
 - `ghcr.io/lvquyen15506/edushift-web:latest`
 
 Mỗi image cũng có tag `sha-<commit>` để có thể triển khai hoặc quay lại bản cụ thể.
-Chưa có VPS nên bước CD hiện dừng ở việc phát hành image. Khi có VPS,
-cấu hình Docker Compose dùng hai image này, PostgreSQL, `DATABASE_URL`,
-`JWT_SECRET` và HTTPS reverse proxy. Web proxy `/api` sang service `api:8000`.
-Chạy thêm service `push-worker` từ cùng image API với lệnh `python -m app.push_worker` và cùng `DATABASE_URL`; worker gửi thông báo đã lưu qua Expo Push Service. Cần cấp quyền truy cập mạng ra `exp.host:443`.
+VPS production dùng [hướng dẫn triển khai](deploy/README.md). Sau khi merge vào
+`main`, workflow triển khai image đã qua kiểm tra lên VPS qua SSH.
+Service `push-worker` gửi thông báo đã lưu qua Expo Push Service; VPS cần
+truy cập ra `exp.host:443`.
 
 ## Chạy phát triển
 

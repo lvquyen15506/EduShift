@@ -82,3 +82,45 @@ jobs:
           tags: |
             ghcr.io/lvquyen15506/edushift-${{ matrix.app }}:latest
             ghcr.io/lvquyen15506/edushift-${{ matrix.app }}:sha-${{ github.sha }}
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    concurrency:
+      group: edushift-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      GHCR_USERNAME: ${{ github.actor }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure trusted SSH connection
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_SSH_KEY" && test -n "$VPS_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_edushift"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_edushift" "$HOME/.ssh/known_hosts"
+      - name: Copy deployment configuration
+        run: |
+          scp -i "$HOME/.ssh/id_edushift" -o StrictHostKeyChecking=yes \
+            deploy/compose.prod.yml deploy/deploy.sh \
+            "$VPS_USER@$VPS_HOST:/opt/edushift/"
+      - name: Authenticate VPS to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | ssh -i "$HOME/.ssh/id_edushift" -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+      - name: Deploy tested commit
+        run: |
+          ssh -i "$HOME/.ssh/id_edushift" -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" "bash /opt/edushift/deploy.sh sha-$GITHUB_SHA"
