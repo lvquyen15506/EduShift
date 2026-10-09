@@ -34,6 +34,14 @@ Tài khoản seed: `employer@edushift.vn / EduShift123!`, `sv001 / EduShift123!`
 | GET | `/api/notifications` | Có | Notification của user, có `shift_id` khi liên quan đến ca để mở chi tiết |
 | PATCH | `/api/notifications/read-all` | Có | Đánh dấu đã đọc |
 
+## Xác minh và vận hành tuyển dụng
+
+Quản trị viên dùng PATCH /api/admin/employers/{id}/verify với is_verified để xác minh hoặc thu hồi xác minh doanh nghiệp. Doanh nghiệp mới đăng ký cần được xác minh trước khi đăng ca.
+
+Chủ ca dùng PATCH /api/shifts/{id}/status với status OPEN hoặc CLOSED để mở hay đóng tuyển. Ca tự chuyển FULL khi đã nhận đủ người và không thể mở lại khi hết chỗ.
+
+Chủ ca dùng POST /api/shifts/{id}/invitations với student_id để mời sinh viên phù hợp. Sinh viên trả lời qua PATCH /api/applications/{id}/respond với accept true hoặc false; khi nhận lời, ca được xếp vào lịch. Doanh nghiệp có thể dùng PATCH /api/applications/{id}/reject để từ chối đơn đang chờ.
+
 ## Lỗi
 
 `400` dữ liệu sai, `401` thiếu/sai token, `403` sai role, `404` không tìm thấy, `409` trùng hoặc xung đột lịch, `422` lỗi validation. Body có dạng `{ "detail": "..." }`.

@@ -9,7 +9,7 @@ import pytest
 def test_accepted_shift_appears_in_calendar_and_blocks_overbooking():
     try:
         from app.database import SessionLocal, engine
-        from app.models import User
+        from app.models import User, Employer
         with engine.connect() as connection:
             connection.exec_driver_sql('SELECT 1')
     except Exception as exc:
@@ -30,6 +30,13 @@ def test_accepted_shift_appears_in_calendar_and_blocks_overbooking():
         response = client.post('/api/auth/register', json=body)
         assert response.status_code == 201, response.text
         created.append(username)
+        if role == 'EMPLOYER':
+            session = SessionLocal()
+            try:
+                session.query(Employer).filter(Employer.user_id == response.json()['user_id']).update({'is_verified': True})
+                session.commit()
+            finally:
+                session.close()
         tokens[suffix] = response.json()['access_token']
 
     def call(method, path, actor, body=None):

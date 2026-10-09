@@ -31,7 +31,17 @@ export default function JobDetail() {
   if (loading && !shift) return <LoadingView />;
   if (!shift) return <Notice title="Không tải được ca làm" detail={error} onRetry={() => { void load(); }} />;
 
-  const canApply = shift.status === 'OPEN' && shift.available && !shift.applied;
+  const canApply = shift.status === 'OPEN' && shift.available && !shift.applied && !shift.invitation_id;
+  async function respond(accept: boolean) {
+    if (!session || !shift?.invitation_id || busy) return;
+    setBusy(true); setError('');
+    try {
+      await api('/api/applications/' + encodeURIComponent(shift.invitation_id) + '/respond', { method: 'PATCH', token: session.access_token, body: { accept } });
+      setShift(current => current ? { ...current, invitation_id: null, applied: true } : current);
+      Alert.alert(accept ? 'Đã nhận ca' : 'Đã từ chối', accept ? 'Ca làm đã xuất hiện trong lịch của bạn.' : 'Doanh nghiệp đã nhận được phản hồi của bạn.');
+    } catch (cause) { setError(errorMessage(cause)); }
+    finally { setBusy(false); }
+  }
   async function apply() {
     if (!session || !shift || busy || !canApply) return;
     setBusy(true); setError('');
@@ -49,7 +59,7 @@ export default function JobDetail() {
     <View style={styles.card}><Text style={styles.section}>Mô tả công việc</Text><Text style={styles.body}>{shift.description || 'Doanh nghiệp chưa cập nhật mô tả.'}</Text>{shift.required_skills.length ? <><Text style={styles.section}>Kỹ năng cần có</Text><View style={styles.tags}>{shift.required_skills.map(skill => <Text style={styles.tag} key={skill}>{skill}</Text>)}</View></> : null}</View>
     <View style={styles.card}><Text style={styles.section}>Vì sao phù hợp?</Text>{shift.match_reasons.map(reason => <Text style={styles.reason} key={reason}>✓ {reason}</Text>)}</View>
     {error ? <Text style={styles.error}>{error}</Text> : null}
-    <ActionButton title={shift.applied ? 'Đã ứng tuyển ca này' : canApply ? 'Ứng tuyển ngay' : 'Ca này chưa thể ứng tuyển'} onPress={apply} disabled={!canApply} busy={busy} />
+    {shift.invitation_id ? <><ActionButton title="Nhận lời mời" onPress={() => { void respond(true); }} busy={busy} /><ActionButton title="Từ chối lời mời" secondary onPress={() => { void respond(false); }} disabled={busy} /></> : <ActionButton title={shift.applied ? 'Đã có đơn hoặc đã nhận ca' : canApply ? 'Ứng tuyển ngay' : 'Ca này chưa thể ứng tuyển'} onPress={apply} disabled={!canApply} busy={busy} />}
   </ScrollView>;
 }
 

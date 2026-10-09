@@ -53,9 +53,11 @@ Kết quả phase 6: 11 test API đạt trên PostgreSQL; parser CSV kiểm tra 
 
 ## Giai đoạn 7 — vận hành tuyển dụng và xác minh
 
-1. [ ] Quản trị viên xác minh doanh nghiệp; doanh nghiệp được xác minh mới có thể đăng ca mới.
-2. [ ] Doanh nghiệp quản lý trạng thái ca, mời sinh viên phù hợp, duyệt/từ chối đơn và sinh viên trả lời lời mời.
-3. [ ] Kiểm thử phân quyền, giới hạn số người, xung đột lịch, thông báo và UI web/mobile. Sửa đến khi đạt.
+1. [x] Quản trị viên xác minh doanh nghiệp; doanh nghiệp được xác minh mới có thể đăng ca mới.
+2. [x] Doanh nghiệp quản lý trạng thái ca, mời sinh viên phù hợp, duyệt/từ chối đơn và sinh viên trả lời lời mời.
+3. [x] Kiểm thử phân quyền, giới hạn số người, xung đột lịch, thông báo và UI web/mobile. Sửa đến khi đạt.
+
+Kết quả phase 7: 12 test API đạt trên PostgreSQL; web lint/build, mobile typecheck/lint và export Android đạt. Thử thao tác trực tiếp trên thiết bị thuộc phase 10.
 
 ## Giai đoạn 8 — thực hiện ca, đánh giá và vị trí
 

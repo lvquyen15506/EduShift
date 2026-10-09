@@ -122,6 +122,18 @@ class ShiftOut(BaseModel):
 class ApplicationCreate(BaseModel):
     shift_id: uuid.UUID
 
+class InvitationCreate(BaseModel):
+    student_id: uuid.UUID
+
+class InvitationResponse(BaseModel):
+    accept: bool
+
+class ShiftStatusUpdate(BaseModel):
+    status: str
+
+class VerificationUpdate(BaseModel):
+    is_verified: bool
+
 class ScheduleInput(BaseModel):
     title: str = Field(default='', max_length=200)
     start_time: datetime
@@ -404,6 +416,16 @@ def admin_shifts(user: models.User = Depends(require_role('ADMIN')), db: Session
     shifts = db.query(models.JobShift).options(joinedload(models.JobShift.applications)).order_by(models.JobShift.created_at.desc()).all()
     return [{**shift_dict(s), 'company_name': s.employer.company_name} for s in shifts]
 
+@app.patch('/api/admin/employers/{employer_id}/verify')
+def verify_employer(employer_id: uuid.UUID, req: VerificationUpdate, user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    employer = db.query(models.Employer).filter(models.Employer.user_id == employer_id).first()
+    if not employer:
+        raise HTTPException(404, 'Không tìm thấy doanh nghiệp')
+    employer.is_verified = req.is_verified
+    db.add(models.Notification(user_id=employer_id, title='Trạng thái xác minh doanh nghiệp', body='Doanh nghiệp đã được xác minh.' if req.is_verified else 'Trạng thái xác minh doanh nghiệp đã bị thu hồi.', kind='VERIFICATION'))
+    db.commit()
+    return {'id': str(employer_id), 'is_verified': employer.is_verified}
+
 @app.get('/api/student/applications')
 def student_applications(user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
     applications = db.query(models.Application).filter(models.Application.student_id == user.id).order_by(models.Application.applied_at.desc()).all()
@@ -421,6 +443,7 @@ def list_shifts(status_filter: Optional[str] = Query(default=None, alias='status
 @app.post('/api/shifts', status_code=201)
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
     if user.role != 'EMPLOYER' or not user.employer_profile: raise HTTPException(403, 'Chỉ doanh nghiệp mới được tạo ca')
+    if not user.employer_profile.is_verified: raise HTTPException(403, 'Doanh nghiệp cần được xác minh trước khi đăng ca')
     start, end = utc_naive(req.start_time), utc_naive(req.end_time)
     if end <= start: raise HTTPException(422, 'Giờ kết thúc phải sau giờ bắt đầu')
     shift = models.JobShift(employer_id=user.id, title=req.title, description=req.description, location=req.location, start_time=start, end_time=end, hourly_rate=req.hourly_rate, required_workers=req.required_workers, required_skills=','.join(req.required_skills))
@@ -434,6 +457,23 @@ def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db:
             db.add(models.Notification(user_id=student.user_id, shift_id=shift.id, title='Có ca làm phù hợp', body=f'{shift.title} phù hợp {result["score"]}% với hồ sơ và lịch của bạn.', kind='MATCH'))
     db.commit(); db.refresh(shift)
     return {**shift_dict(shift), 'matched_students': matched}
+
+@app.patch('/api/shifts/{shift_id}/status')
+def update_shift_status(shift_id: uuid.UUID, req: ShiftStatusUpdate, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    shift = db.query(models.JobShift).filter(models.JobShift.id == shift_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not shift:
+        raise HTTPException(404, 'Không tìm thấy ca làm')
+    if req.status not in {'OPEN', 'CLOSED'}:
+        raise HTTPException(422, 'Trạng thái chỉ có thể là OPEN hoặc CLOSED')
+    if req.status == 'OPEN':
+        if shift.start_time <= datetime.utcnow():
+            raise HTTPException(409, 'Không thể mở lại ca đã bắt đầu')
+        accepted = db.query(models.Application).filter_by(shift_id=shift.id, status='ACCEPTED').count()
+        if accepted >= shift.required_workers:
+            raise HTTPException(409, 'Ca đã đủ người')
+    shift.status = req.status
+    db.commit()
+    return {'id': str(shift.id), 'status': shift.status}
 
 @app.get('/api/shifts/{shift_id}')
 def get_shift(shift_id: uuid.UUID, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
@@ -449,7 +489,7 @@ def get_shift(shift_id: uuid.UUID, user: models.User = Depends(user_or_401), db:
         match = match_student_shift(user.student_profile, shift)
         if own_application and own_application.status == 'ACCEPTED':
             return {**shift_dict(shift), 'match_score': own_application.match_score, 'match_reasons': own_application.match_reasons.split(', '), 'available': False, 'applied': True}
-        return {**shift_dict(shift), 'match_score': match['score'], 'match_reasons': match['reasons'], 'available': match['available'], 'applied': bool(own_application)}
+        return {**shift_dict(shift), 'match_score': match['score'], 'match_reasons': match['reasons'], 'available': match['available'], 'applied': bool(own_application and own_application.status != 'INVITED'), 'invitation_id': str(own_application.id) if own_application and own_application.status == 'INVITED' else None}
     if user.role not in {'EMPLOYER', 'ADMIN'}:
         raise HTTPException(403, 'Tài khoản không có quyền truy cập')
     return shift_dict(shift)
@@ -483,6 +523,27 @@ def apply_shift(req: ApplicationCreate, user: models.User = Depends(user_or_401)
     db.add(application); db.add(models.Notification(user_id=shift.employer_id, shift_id=shift.id, title='Ứng viên mới cho ca làm', body=f'{user.student_profile.full_name} vừa ứng tuyển {shift.title}.', kind='APPLICATION')); db.commit()
     return {'message': 'Ứng tuyển thành công', 'application_id': str(application.id), 'match_score': application.match_score}
 
+@app.post('/api/shifts/{shift_id}/invitations', status_code=201)
+def invite_student(shift_id: uuid.UUID, req: InvitationCreate, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    shift = db.query(models.JobShift).filter(models.JobShift.id == shift_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not shift:
+        raise HTTPException(404, 'Không tìm thấy ca làm')
+    if shift.status != 'OPEN' or shift.start_time <= datetime.utcnow():
+        raise HTTPException(409, 'Ca không còn nhận ứng viên')
+    student = db.query(models.Student).options(selectinload(models.Student.schedules)).filter(models.Student.user_id == req.student_id).first()
+    if not student:
+        raise HTTPException(404, 'Không tìm thấy sinh viên')
+    if db.query(models.Application).filter_by(shift_id=shift.id, student_id=student.user_id).first():
+        raise HTTPException(409, 'Sinh viên đã có đơn hoặc lời mời cho ca này')
+    match = match_student_shift(student, shift)
+    if not match['available']:
+        raise HTTPException(409, 'Ca không phù hợp lịch sinh viên')
+    application = models.Application(student_id=student.user_id, shift_id=shift.id, status='INVITED', match_score=match['score'], match_reasons=', '.join(match['reasons']))
+    db.add(application)
+    db.add(models.Notification(user_id=student.user_id, shift_id=shift.id, title='Lời mời nhận ca làm', body=f'{shift.employer.company_name} mời bạn nhận ca {shift.title}.', kind='INVITATION'))
+    db.commit()
+    return {'id': str(application.id), 'status': 'INVITED'}
+
 @app.get('/api/shifts/{shift_id}/applications')
 def shift_applications(shift_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
     shift = db.query(models.JobShift).filter(models.JobShift.id == shift_id, models.JobShift.employer_id == user.id).first()
@@ -510,6 +571,47 @@ def accept_application(application_id: uuid.UUID, user: models.User = Depends(re
     application.status = 'ACCEPTED'
     db.add(models.Schedule(student_id=application.student_id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
     db.add(models.Notification(user_id=application.student_id, shift_id=shift.id, title='Bạn đã được nhận vào ca làm', body=f'Ca {shift.title} đã được xếp vào lịch của bạn.', kind='APPLICATION'))
+    if accepted + 1 >= shift.required_workers:
+        shift.status = 'FULL'
+    db.commit()
+    return {'id': str(application.id), 'status': application.status, 'shift_id': str(shift.id)}
+
+@app.patch('/api/applications/{application_id}/reject')
+def reject_application(application_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).join(models.JobShift).filter(models.Application.id == application_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy đơn ứng tuyển')
+    if application.status != 'PENDING':
+        raise HTTPException(409, 'Đơn không còn chờ duyệt')
+    application.status = 'REJECTED'
+    db.add(models.Notification(user_id=application.student_id, shift_id=application.shift_id, title='Kết quả ứng tuyển', body=f'Đơn ứng tuyển ca {application.shift.title} chưa được chấp nhận.', kind='APPLICATION'))
+    db.commit()
+    return {'id': str(application.id), 'status': application.status}
+
+@app.patch('/api/applications/{application_id}/respond')
+def respond_invitation(application_id: uuid.UUID, req: InvitationResponse, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter(models.Application.id == application_id, models.Application.student_id == user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy lời mời')
+    if application.status != 'INVITED':
+        raise HTTPException(409, 'Lời mời không còn hiệu lực')
+    shift = db.query(models.JobShift).filter(models.JobShift.id == application.shift_id).with_for_update().first()
+    if not req.accept:
+        application.status = 'DECLINED'
+    else:
+        if shift.status != 'OPEN' or shift.start_time <= datetime.utcnow():
+            raise HTTPException(409, 'Ca không còn nhận ứng viên')
+        accepted = db.query(models.Application).filter_by(shift_id=shift.id, status='ACCEPTED').count()
+        if accepted >= shift.required_workers:
+            raise HTTPException(409, 'Ca đã đủ người')
+        student = db.query(models.Student).options(selectinload(models.Student.schedules)).filter(models.Student.user_id == user.id).first()
+        if not match_student_shift(student, shift)['available']:
+            raise HTTPException(409, 'Lịch của bạn đã thay đổi, không thể nhận ca')
+        application.status = 'ACCEPTED'
+        db.add(models.Schedule(student_id=user.id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
+        if accepted + 1 >= shift.required_workers:
+            shift.status = 'FULL'
+    db.add(models.Notification(user_id=shift.employer_id, shift_id=shift.id, title='Sinh viên trả lời lời mời', body=f'{user.student_profile.full_name} đã {"nhận" if req.accept else "từ chối"} lời mời ca {shift.title}.', kind='INVITATION'))
     db.commit()
     return {'id': str(application.id), 'status': application.status, 'shift_id': str(shift.id)}
 

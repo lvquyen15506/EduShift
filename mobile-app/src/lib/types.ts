@@ -29,6 +29,7 @@ export type ShiftDetail = Shift & {
   match_reasons: string[];
   available: boolean;
   applied: boolean;
+  invitation_id?: string | null;
 };
 
 export type StudentDashboard = {
