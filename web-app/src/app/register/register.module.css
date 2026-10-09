@@ -93,6 +93,60 @@
   font-weight: 700;
 }
 
+.otpField label {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.otpGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.otpInput {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: .01;
+  cursor: text;
+}
+
+.otpSlot {
+  display: grid;
+  min-width: 0;
+  height: 58px;
+  place-items: center;
+  border: 1.5px solid #d9c4ce;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 3px 9px #7f285d0b;
+  transition: border-color .18s, box-shadow .18s, transform .18s;
+}
+
+.otpGrid:focus-within .otpSlotActive {
+  border-color: var(--magenta);
+  box-shadow: 0 0 0 3px #b10e6b1d;
+  transform: translateY(-2px);
+}
+
+.otpHint {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .field input {
   display: block;
   width: 100%;
@@ -180,6 +234,33 @@
 .textButton:disabled { opacity: .55; cursor: wait; }
 .textButton:focus-visible { outline: 3px solid #e970a8; outline-offset: 2px; }
 
+.successPanel {
+  padding: 24px;
+  border: 1px solid #b9e3cf;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f4fff9, #ffffff);
+  text-align: center;
+}
+
+.successIcon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 15px;
+  place-items: center;
+  border-radius: 50%;
+  background: #168756;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.successPanel h2 { margin: 0 0 9px; color: var(--ink); font-size: 21px; }
+.successPanel p { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.successLink { display: grid; min-height: 48px; place-items: center; border-radius: 10px; background: var(--magenta); color: #fff; font-weight: 750; }
+.successLink:hover { background: #8e0753; color: #fff; }
+.successLink:focus-visible { outline: 3px solid #e970a8; outline-offset: 3px; }
+
 .footer {
   margin: 24px 0 0;
   color: var(--muted);
@@ -204,6 +285,9 @@
   .header h1 {
     font-size: 27px;
   }
+
+  .otpGrid { gap: 6px; }
+  .otpSlot { height: 50px; font-size: 23px; border-radius: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
