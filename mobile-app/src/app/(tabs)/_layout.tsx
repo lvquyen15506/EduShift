@@ -21,5 +21,6 @@ export default function TabsLayout() {
     <Tabs.Screen name="jobs" options={{ title: 'Việc phù hợp', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>✦</Text> }} />
     <Tabs.Screen name="schedule" options={{ title: 'Lịch của tôi', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>▦</Text> }} />
     <Tabs.Screen name="notifications" options={{ title: 'Thông báo', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>●</Text> }} />
+    <Tabs.Screen name="profile" options={{ title: 'Hồ sơ', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>◉</Text> }} />
   </Tabs>;
 }

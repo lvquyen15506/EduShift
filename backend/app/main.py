@@ -349,10 +349,23 @@ def add_schedule(req: ScheduleInput, user: models.User = Depends(require_role('S
 @app.post('/api/schedules/import')
 def import_schedules(req: ScheduleImport, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
     items = [schedule_model(item, user.id) for item in req.items]
+    current = db.query(models.Schedule).filter(models.Schedule.student_id == user.id).all()
+    work = [item for item in current if item.source == 'SHIFT']
+    for item in items:
+        if item.type in {'STUDY', 'BUSY'} and any(shift.start_time < item.end_time and shift.end_time > item.start_time for shift in work):
+            raise HTTPException(409, 'Lịch nhập trùng với ca làm đã nhận')
+    retained = work if req.replace else current
+    known = {(item.title, item.type, item.start_time, item.end_time) for item in retained}
+    unique = []
+    for item in items:
+        key = (item.title, item.type, item.start_time, item.end_time)
+        if key not in known:
+            known.add(key)
+            unique.append(item)
     if req.replace:
         db.query(models.Schedule).filter(models.Schedule.student_id == user.id, models.Schedule.source != 'SHIFT').delete(synchronize_session=False)
-    db.add_all(items); db.commit()
-    return {'imported': len(items), 'replaced': req.replace}
+    db.add_all(unique); db.commit()
+    return {'imported': len(unique), 'skipped': len(items) - len(unique), 'replaced': req.replace}
 
 @app.post('/api/schedules/sync-school')
 def sync_school_schedules(req: SchoolSyncRequest, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):

@@ -36,3 +36,10 @@ App dùng `eas.json` profile `preview`: Android tạo APK, iOS tạo IPA ký ki�
 Để thử iOS bằng TestFlight, cấu hình Apple signing và App Store Connect API key trong EAS, tạo build `production` đầu tiên bằng lệnh tương tác, rồi chạy workflow với lựa chọn `testflight`. Lựa chọn này build iOS profile `production` và gửi lên TestFlight; bản IPA `preview` chỉ dùng cho phân phối ad hoc, không gửi được lên TestFlight.
 
 Luồng kiểm tra trên máy thật: doanh nghiệp đăng ca trên web với giờ nằm trong lịch rảnh của sinh viên → sinh viên mở tab **Thông báo** và chạm **Xem ca làm** → xem điểm phù hợp và ứng tuyển → doanh nghiệp thấy thông báo ứng viên mới và đơn trong trang ứng viên. Test API tự động của luồng này nằm ở `backend/tests/test_phase5_flow.py`.
+# Nhập lịch từ file CSV
+
+Trong tab **Lịch của tôi**, chọn **Nhập lịch từ file CSV**. File UTF-8 cần các cột
+`title,date,start,end,type`; `date` theo `YYYY-MM-DD`, giờ theo `HH:mm` tại Việt Nam,
+`type` là `STUDY`, `BUSY` hoặc `FREE` (mặc định `STUDY`).
+Xem [file mẫu](../docs/sample-schedule.csv). Giới hạn 500 mục và 1 MB mỗi lần.
+App cho xem số mục hợp lệ trước khi nhập; API bỏ qua mục trùng và giữ nguyên ca đã nhận.

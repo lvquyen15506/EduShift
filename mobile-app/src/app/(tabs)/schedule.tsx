@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Alert, FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { ActionButton, LoadingView, Notice } from '../../components/Ui';
 import { api, errorMessage } from '../../lib/api';
 import { useSession } from '../../lib/session';
+import { parseScheduleCsv, type ImportedSchedule } from '../../lib/schedule-file';
 import type { ScheduleItem } from '../../lib/types';
 import { colors } from '../../theme';
 
@@ -77,6 +80,34 @@ export default function Schedule() {
     finally { setBusy(false); }
   }
 
+  async function importFile(rows: ImportedSchedule[]) {
+    if (!session || busy) return;
+    setBusy(true);
+    try {
+      const result = await api<{ imported: number; skipped: number }>('/api/schedules/import', { method: 'POST', token: session.access_token, body: { items: rows, replace: false } });
+      await load(true);
+      Alert.alert('Nhập lịch xong', `Đã thêm ${result.imported} mục, bỏ qua ${result.skipped} mục trùng.`);
+    } catch (cause) { Alert.alert('Không thể nhập lịch', errorMessage(cause)); }
+    finally { setBusy(false); }
+  }
+
+  async function chooseFile() {
+    if (busy) return;
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (picked.canceled) return;
+      const asset = picked.assets[0];
+      if (!asset.name.toLowerCase().endsWith('.csv')) throw new Error('Chọn file CSV có các cột title,date,start,end,type.');
+      if (asset.size && asset.size > 1_000_000) throw new Error('File CSV cần nhỏ hơn 1 MB.');
+      const content = asset.file ? await asset.file.text() : await new File(asset.uri).text();
+      const rows = parseScheduleCsv(content);
+      Alert.alert('Xem trước file lịch', `${asset.name}: ${rows.length} mục hợp lệ. Giờ trong file được hiểu theo múi giờ Việt Nam.`, [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Nhập lịch', onPress: () => { void importFile(rows); } },
+      ]);
+    } catch (cause) { Alert.alert('File lịch không hợp lệ', errorMessage(cause)); }
+  }
+
   function remove(item: ScheduleItem) {
     if (!session || item.source === 'SHIFT') return;
     Alert.alert('Xóa mục lịch?', item.title || typeLabels[item.type], [
@@ -101,7 +132,7 @@ export default function Schedule() {
       keyExtractor={item => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void load(true); }} tintColor={colors.magenta} />}
       contentContainerStyle={styles.content}
-      ListHeaderComponent={<View><Text style={styles.eyebrow}>THỜI GIAN CỦA BẠN</Text><Text style={styles.heading}>Lịch học & lịch rảnh</Text><Text style={styles.subtitle}>EduShift dùng lịch này để loại ca trùng giờ học và gợi ý việc phù hợp.</Text><View style={styles.actions}><ActionButton title="Đồng bộ lịch trường" onPress={() => { setFormError(''); setSyncOpen(true); }} /><ActionButton title="Thêm lịch thủ công" secondary onPress={() => { setFormError(''); setManualOpen(true); }} /></View>{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.section}>Các mục lịch ({items?.length || 0})</Text></View>}
+      ListHeaderComponent={<View><Text style={styles.eyebrow}>THỜI GIAN CỦA BẠN</Text><Text style={styles.heading}>Lịch học & lịch rảnh</Text><Text style={styles.subtitle}>EduShift dùng lịch này để loại ca trùng giờ học và gợi ý việc phù hợp.</Text><View style={styles.actions}><ActionButton title="Đồng bộ lịch trường" onPress={() => { setFormError(''); setSyncOpen(true); }} /><ActionButton title="Nhập lịch từ file CSV" secondary onPress={() => { void chooseFile(); }} busy={busy} /><ActionButton title="Thêm lịch thủ công" secondary onPress={() => { setFormError(''); setManualOpen(true); }} /></View>{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.section}>Các mục lịch ({items?.length || 0})</Text></View>}
       ListEmptyComponent={<Notice title="Chưa có lịch" detail="Đồng bộ lịch trường hoặc thêm khoảng bận, rảnh để nhận gợi ý chính xác hơn." />}
       renderItem={({ item }) => <View style={styles.card}><View style={styles.row}><Text style={styles.cardTitle}>{item.title || typeLabels[item.type]}</Text><Text style={[styles.badge, item.type === 'FREE' && styles.freeBadge, item.type === 'WORK' && styles.workBadge]}>{typeLabels[item.type]}</Text></View><Text style={styles.time}>{new Date(item.start_time).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' })} – {new Date(item.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</Text><View style={styles.row}><Text style={styles.source}>{item.source === 'SCHOOL' ? 'Từ cổng trường' : item.source === 'SHIFT' ? 'Đã nhận ca' : 'Tự thêm'}</Text>{item.source !== 'SHIFT' && <Pressable accessibilityRole="button" onPress={() => remove(item)}><Text style={styles.remove}>Xóa</Text></Pressable>}</View></View>}
     />

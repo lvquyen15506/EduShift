@@ -43,6 +43,41 @@ Nguồn: [lộ trình triển khai](docs/Ke_Hoach_Trien_Khai.md). Cập nhật: 
 3. [x] Thêm liên kết từ thông báo mobile tới chi tiết ca; dữ liệu thông báo có `shift_id`.
 4. [ ] Chạy build cloud, cài APK và thử TestFlight trên thiết bị thật sau khi có Expo project, token, API HTTPS và chứng chỉ Apple.
 
+## Giai đoạn 6 — hồ sơ và nhập lịch trên mobile
+
+1. [x] Thêm màn hồ sơ sinh viên trong app để xem/sửa tên, email, trường, ngành, kỹ năng và ảnh đại diện bằng API hiện có.
+2. [x] Cho sinh viên chọn file lịch học, xem trước số mục hợp lệ và nhập vào lịch mà không làm mất ca đã nhận. Ghi rõ định dạng file hỗ trợ.
+3. [x] Kiểm thử quyền, dữ liệu file lỗi/trùng, lịch đã nhận, mobile lint/typecheck/Expo Doctor và luồng API. Chỉ chuyển phase khi đạt.
+
+Kết quả phase 6: 11 test API đạt trên PostgreSQL; parser CSV kiểm tra file mẫu, múi giờ, trùng và ngày lỗi; mobile typecheck, lint, Expo Doctor 21/21 và export Android đạt. Thử thao tác native trên máy thật thuộc phase 10.
+
+## Giai đoạn 7 — vận hành tuyển dụng và xác minh
+
+1. [ ] Quản trị viên xác minh doanh nghiệp; doanh nghiệp được xác minh mới có thể đăng ca mới.
+2. [ ] Doanh nghiệp quản lý trạng thái ca, mời sinh viên phù hợp, duyệt/từ chối đơn và sinh viên trả lời lời mời.
+3. [ ] Kiểm thử phân quyền, giới hạn số người, xung đột lịch, thông báo và UI web/mobile. Sửa đến khi đạt.
+
+## Giai đoạn 8 — thực hiện ca, đánh giá và vị trí
+
+1. [ ] Sinh viên check-in/check-out ca đã nhận; doanh nghiệp xác nhận hoàn thành và xem chấm công.
+2. [ ] Hai phía đánh giá sau ca; điểm đánh giá sinh viên lấy từ review thật, không dùng điểm giả.
+3. [ ] Bổ sung tọa độ tự nguyện và khoảng cách vào Match Score khi có dữ liệu; giải thích điểm và giữ quyền riêng tư vị trí.
+4. [ ] Kiểm thử toàn bộ trạng thái ca, review, khoảng cách và hiệu năng matching. Sửa đến khi đạt.
+
+## Giai đoạn 9 — thông báo push và phát hành
+
+1. [ ] Đăng ký Expo push token, gửi push khi có ca phù hợp hoặc thay đổi trạng thái đơn, xử lý lỗi/retry và vẫn lưu thông báo trong app.
+2. [ ] Chạy kiểm thử hồi quy API/web/mobile, kiểm tra responsive và đo hiệu năng theo yêu cầu tài liệu.
+3. [ ] Build APK/IPA bằng EAS, thử APK và TestFlight trên thiết bị thật; hoàn thiện hướng dẫn vận hành và CI/CD. Phụ thuộc Expo project/token, chứng chỉ Apple, API HTTPS và thiết bị.
+
+## Giai đoạn 10 — nghiệm thu toàn hệ thống
+
+1. [ ] Chạy lại toàn bộ test API, web, mobile và luồng đầu cuối trên môi trường phát hành.
+2. [ ] Kiểm tra responsive, quyền riêng tư, accessibility, các trạng thái lỗi và mức khớp thiết kế Figma; sửa lỗi và chạy lại cho đến khi đạt.
+3. [ ] Đối chiếu từng yêu cầu trong tài liệu với bản chạy thật, cập nhật tài liệu và checklist bàn giao để người dùng review toàn bộ.
+
+Mỗi phase chỉ đánh dấu hoàn thành khi test liên quan đạt. Lỗi phát hiện trong phase phải sửa và chạy lại trước khi chuyển phase tiếp theo.
+
 ## Quy ước MVP
 
 - API nhận thời gian ISO 8601; backend lưu UTC dạng `timestamp` không timezone như schema hiện tại.
