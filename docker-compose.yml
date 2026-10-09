@@ -21,9 +21,13 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/edushift
       JWT_SECRET: edushift-compose-secret-change-me
-      SMTP_HOST: mailpit
-      SMTP_PORT: "1025"
-      SMTP_FROM: no-reply@edushift.local
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@edushift.local}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_SSL: ${SMTP_SSL:-false}
     depends_on:
       db: {condition: service_healthy}
       mailpit: {condition: service_started}

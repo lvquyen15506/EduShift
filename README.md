@@ -29,6 +29,13 @@ cần quản trị viên duyệt trước khi đăng ca. Trang đăng nhập có
 khẩu?” để đặt lại mật khẩu bằng OTP. Mailpit chỉ nhận thư trong môi trường phát
 triển; không chuyển thư ra email thật.
 
+Mặc định local gửi OTP vào Mailpit, xem thư tại http://localhost:8025. Nếu muốn
+thử gửi email thật từ máy local, tạo `.env` ở thư mục gốc repo (cùng cấp với
+`docker-compose.yml`) với các biến `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`,
+`SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS` và `SMTP_SSL`. File này đã
+được Git bỏ qua. Chạy `docker compose up -d --build --force-recreate api` để
+API nhận cấu hình mới. Đừng sao chép `.env` của VPS về máy local.
+
 Khi triển khai thật, cấu hình `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`,
 `SMTP_USERNAME`, `SMTP_PASSWORD` và `SMTP_STARTTLS` hoặc `SMTP_SSL` trên API,
 cùng `JWT_SECRET` riêng. Không dùng Mailpit làm SMTP sản xuất.
