@@ -1,0 +1,7 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { Alert, Card, Skeleton, Table, Tag } from 'antd';
+import AppShell from '@/components/AppShell';
+import { api } from '@/lib/api';
+type User = { id: string; name: string; username: string | null; email: string | null; role: string; created_at: string; is_verified: boolean | null };
+export default function AdminUsers() { const [rows, setRows] = useState<User[]>([]); const [error, setError] = useState(''); useEffect(() => { api<User[]>('/api/admin/users').then(setRows).catch(e => setError(e.message)); }, []); return <AppShell><div className="role-page admin-page"><div className="role-heading"><div><span className="eyebrow">QUẢN TRỊ / TÀI KHOẢN</span><h1>Tài khoản hệ thống</h1><p>Quản lý và kiểm tra danh sách sinh viên, doanh nghiệp, quản trị viên.</p></div></div>{error && <Alert type="error" title={error} />}{!rows.length && !error ? <Skeleton active /> : <Card className="admin-table-card"><Table rowKey="id" dataSource={rows} columns={[{ title: 'Tên', dataIndex: 'name' }, { title: 'Username', dataIndex: 'username' }, { title: 'Email', dataIndex: 'email' }, { title: 'Vai trò', dataIndex: 'role', render: (role: string) => <Tag color={role === 'ADMIN' ? 'purple' : role === 'STUDENT' ? 'green' : 'magenta'}>{role}</Tag> }, { title: 'Xác minh', dataIndex: 'is_verified', render: (verified: boolean | null) => verified === null ? '—' : <Tag color={verified ? 'green' : 'orange'}>{verified ? 'Đã xác minh' : 'Chờ duyệt'}</Tag> }]} /></Card>}</div></AppShell>; }

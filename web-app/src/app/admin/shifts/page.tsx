@@ -1,0 +1,7 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { Alert, Card, Skeleton, Table, Tag } from 'antd';
+import AppShell from '@/components/AppShell';
+import { api } from '@/lib/api';
+type Shift = { id: string; title: string; company_name: string; location: string; start_time: string; status: string; applicants: number };
+export default function AdminShifts() { const [rows, setRows] = useState<Shift[]>([]); const [error, setError] = useState(''); useEffect(() => { api<Shift[]>('/api/admin/shifts').then(setRows).catch(e => setError(e.message)); }, []); return <AppShell><div className="role-page admin-page"><div className="role-heading"><div><span className="eyebrow">QUẢN TRỊ / CA LÀM</span><h1>Toàn bộ ca làm việc</h1><p>Giám sát nội dung tuyển dụng và trạng thái hoạt động.</p></div></div>{error && <Alert type="error" title={error} />}{!rows.length && !error ? <Skeleton active /> : <Card className="admin-table-card"><Table rowKey="id" dataSource={rows} columns={[{ title: 'Vị trí', dataIndex: 'title' }, { title: 'Doanh nghiệp', dataIndex: 'company_name' }, { title: 'Địa điểm', dataIndex: 'location' }, { title: 'Bắt đầu', dataIndex: 'start_time', render: (date: string) => new Date(date).toLocaleString('vi-VN') }, { title: 'Ứng viên', dataIndex: 'applicants' }, { title: 'Trạng thái', dataIndex: 'status', render: (status: string) => <Tag color={status === 'OPEN' ? 'green' : 'default'}>{status}</Tag> }]} /></Card>}</div></AppShell>; }

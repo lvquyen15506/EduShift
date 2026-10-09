@@ -1,0 +1,67 @@
+# EduShift — kế hoạch thực hiện
+
+Nguồn: [lộ trình triển khai](docs/Ke_Hoach_Trien_Khai.md). Cập nhật: 2026-10-09.
+
+## Hiện trạng
+
+- Giai đoạn 1 và 2 đã triển khai: xác thực, lịch học từ NoteClass, matching theo lịch và landing page.
+- Web doanh nghiệp có dashboard, form đăng ca, danh sách ca và danh sách ứng viên theo từng ca.
+
+## Giai đoạn 2 — lịch học và matching
+
+1. [x] Rà soát schema, API hiện tại và nơi sử dụng Match Score.
+2. [x] Thêm API sinh viên xem, thêm, nhập hàng loạt và xóa lịch học/lịch rảnh. Kiểm tra thời gian, loại lịch và quyền sở hữu.
+3. [x] Viết hàm matching độc lập: loại ca trùng lịch bận, xác nhận khung giờ rảnh khi sinh viên đã khai báo, tính điểm theo kỹ năng và đánh giá. Không tiết lộ lịch cá nhân cho doanh nghiệp.
+4. [x] Tính điểm khi tạo ca, trả danh sách ứng viên phù hợp theo ca; dùng cùng thuật toán cho ứng tuyển và gợi ý ca cho sinh viên.
+5. [x] Cập nhật tài liệu API và kiểm thử các ca giao nhau, ranh giới thời gian, phân quyền và điểm khớp.
+6. [x] Ánh xạ dữ liệu `date`/`timelearn`/`title`/`desc` từ NoteClass, bổ sung đồng bộ lịch trường và giữ lịch nhập tay. Không lưu mật khẩu cổng trường.
+7. [x] Thay trang `/` bằng landing page responsive với lời giới thiệu, lợi ích, quy trình và nút đăng ký/đăng nhập.
+
+## Giai đoạn 3 — web doanh nghiệp
+
+1. [x] Setup Next.js 16, Tailwind CSS 4 và giao diện dashboard, form đăng ca, danh sách ứng viên.
+2. [x] Form gửi `POST /api/shifts`, kiểm tra thời gian/lương/số lượng và chuyển sang ứng viên của ca vừa tạo.
+3. [x] Danh sách ứng viên chọn ca, gọi API theo `shift_id` và lọc Match Score từ 90%.
+4. [x] Dashboard tính Match Score thực tế cho ca đang tuyển, liên kết ca và ứng viên; bỏ thao tác chưa có API.
+5. [x] Đọc trực tiếp các frame Figma cho dashboard (`1:2951`) và ứng viên (`1:811`) bằng kết nối tích hợp; đưa web doanh nghiệp về sidebar, vùng nội dung 944px và trang ứng viên có danh sách kèm ô chi tiết.
+6. [x] Bổ sung dữ liệu dashboard từ API: số đơn ứng tuyển theo 7 ngày UTC và 5 ca sắp tới của doanh nghiệp, rồi hiển thị hai khối này trên web.
+7. [ ] So sánh từng thành phần và hoàn thiện mức khớp pixel với Figma. Các hành động mời ứng viên và dữ liệu khoảng cách trong mẫu thiết kế chưa thuộc luồng API MVP hiện tại.
+
+## Giai đoạn 4 — ứng dụng sinh viên
+
+1. [x] Dùng Expo Router, màn đăng ký và đăng nhập sinh viên; lưu phiên bằng SecureStore.
+2. [x] Hiển thị ca gợi ý từ API, Match Score, chi tiết ca và gửi đơn ứng tuyển.
+3. [x] Xem, thêm, xóa lịch học/lịch rảnh và đồng bộ lịch trường theo phiên nhập thông tin.
+4. [x] Xem thông báo, đánh dấu tất cả đã đọc và đăng xuất.
+5. [x] Kiểm tra lint, typecheck, Expo Doctor, bundle Android và luồng API; CI kiểm tra mã nguồn, chưa tự gửi build cloud.
+6. [x] Doanh nghiệp duyệt đơn ứng tuyển; ca đã nhận tự xuất hiện trong lịch sinh viên và chặn ca trùng giờ. Có test tích hợp cho quyền, sức chứa, lịch rảnh và tự xếp ca.
+
+## Giai đoạn 5 — build, test và phân phối
+
+1. [x] Cấu hình EAS `preview` tạo APK/IPA nội bộ và `production` cho TestFlight; GitHub Actions kiểm tra mã, build và lưu bản thử vào Artifacts khi đã cấu hình Expo/Apple.
+2. [x] Test tích hợp API luồng doanh nghiệp đăng ca → sinh viên nhận thông báo, thấy ca gợi ý và ứng tuyển → doanh nghiệp nhận thông báo ứng viên.
+3. [x] Thêm liên kết từ thông báo mobile tới chi tiết ca; dữ liệu thông báo có `shift_id`.
+4. [ ] Chạy build cloud, cài APK và thử TestFlight trên thiết bị thật sau khi có Expo project, token, API HTTPS và chứng chỉ Apple.
+
+## Quy ước MVP
+
+- API nhận thời gian ISO 8601; backend lưu UTC dạng `timestamp` không timezone như schema hiện tại.
+- Lịch `STUDY` và `BUSY` chặn ca làm nếu giao nhau. Lịch `FREE` là khung giờ sẵn sàng; nếu đã khai báo lịch `FREE`, ca phải nằm trọn trong một hoặc nhiều khung giờ rảnh liên tiếp.
+- Match Score từ 0 đến 100: lịch rảnh 60, kỹ năng 25, đánh giá 15. Ca xung đột lịch hoặc ngoài khung giờ rảnh nhận 0 điểm và không được gợi ý.
+- Chưa có tọa độ hoặc API định vị nên khoảng cách chỉ được ghi là việc tiếp theo, chưa đưa vào điểm để tránh số liệu giả.
+
+## Kiểm chứng
+
+- `PYTHONPATH=backend pytest -q backend/tests/test_matching.py`: 4 bài kiểm thử đạt.
+- API đang chạy trên Docker: `GET /api/schedules` trả 200 cho sinh viên và 403 cho doanh nghiệp; thêm/xóa lịch trả 201/204; `GET /api/candidates` trả 200.
+- Tài khoản cổng lịch mẫu trả dữ liệu hợp lệ; bộ đọc lịch chuyển được 43 mục, không ghi thông tin đăng nhập vào mã hoặc cơ sở dữ liệu.
+- `docker compose exec -T web npm run build`: build Next.js thành công.
+- Phase 3: `npm run build`, `npm run lint`, `PYTHONPATH=backend pytest -q backend/tests` đều đạt (6 test backend).
+- Thử API bằng tài khoản tạm: tạo ca HTTP 201, lấy ứng viên theo ca và dashboard cùng trả Match Score 100 cho sinh viên thử; sau đó đã xóa dữ liệu thử.
+- Landing, trang đăng ca và trang ứng viên trả HTTP 200.
+- Chụp dashboard và trang ứng viên bằng Chrome headless sau khi đăng nhập tài khoản demo; không có tràn ngang ở 1280px.
+- Phase 4: `npm ci`, `npm run typecheck`, `npm run lint`, `npx expo-doctor` (21/21), `npx expo export --platform android --output-dir dist` và `PYTHONPATH=backend pytest -q backend/tests` (6 test) đều đạt.
+- Thử API bằng ba tài khoản tạm: lịch thêm/xem/xóa, phân quyền, chi tiết ca, gợi ý, thông báo, ứng tuyển và chặn đơn trùng đều đạt; đã xóa tài khoản cùng dữ liệu liên quan.
+- Bổ sung trang lịch sinh viên trên web tại `/student/schedule`: xem theo tuần, danh sách, thêm/xóa và đồng bộ lịch trường. Web lint/build đạt; Chrome headless đã mở trang bằng phiên sinh viên.
+- Luồng nhận ca: `docker compose exec -T api python -m pytest -q tests` đạt 7 bài; web build/lint và mobile typecheck/lint đạt. Tài khoản demo `sv001` có ca đã nhận ngày 11/10/2026, 14:00–17:00 (giờ Việt Nam), nằm trong khung rảnh 13:00–18:00 để xem UI.
+- Đồng bộ trường: sửa header hai request tới cổng lịch theo NoteClass. Thử endpoint đang chạy với tài khoản mẫu trả HTTP 200, lưu 43 mục `SCHOOL` và giữ nguyên lịch `MANUAL`/`SHIFT`.

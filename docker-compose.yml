@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: edushift_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: edushift
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d edushift"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build: ./backend
+    container_name: edushift_api
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/edushift
+      JWT_SECRET: edushift-compose-secret-change-me
+    depends_on:
+      db: {condition: service_healthy}
+    volumes: [./backend:/app]
+    command: sh -c "python -m seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    restart: unless-stopped
+  web:
+    build:
+      context: ./web-app
+      target: dev
+    container_name: edushift_web
+    ports: ["3000:3000"]
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      API_PROXY_TARGET: http://api:8000
+    depends_on: [api]
+    volumes: [./web-app:/app, /app/node_modules, /app/.next]
+    command: npm run dev
+    restart: unless-stopped
+volumes:
+  postgres_data:
