@@ -15,6 +15,7 @@ Mỗi image cũng có tag `sha-<commit>` để có thể triển khai hoặc qua
 Chưa có VPS nên bước CD hiện dừng ở việc phát hành image. Khi có VPS,
 cấu hình Docker Compose dùng hai image này, PostgreSQL, `DATABASE_URL`,
 `JWT_SECRET` và HTTPS reverse proxy. Web proxy `/api` sang service `api:8000`.
+Chạy thêm service `push-worker` từ cùng image API với lệnh `python -m app.push_worker` và cùng `DATABASE_URL`; worker gửi thông báo đã lưu qua Expo Push Service. Cần cấp quyền truy cập mạng ra `exp.host:443`.
 
 ## Chạy phát triển
 

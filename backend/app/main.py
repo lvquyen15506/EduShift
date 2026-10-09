@@ -54,6 +54,9 @@ def migrate_schema():
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind VARCHAR(30) DEFAULT 'INFO'",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS shift_id UUID",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS push_attempts INTEGER DEFAULT 0",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS push_next_attempt_at TIMESTAMP",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS push_sent_at TIMESTAMP",
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS title VARCHAR(200)",
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'STUDY'",
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'MANUAL'",
@@ -167,6 +170,10 @@ class LocationUpdate(BaseModel):
 class ReviewCreate(BaseModel):
     rating: int = Field(ge=1, le=5)
     comment: str = Field(default='', max_length=1000)
+
+class PushTokenInput(BaseModel):
+    token: str = Field(min_length=20, max_length=250, pattern=r'^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$')
+    platform: str = Field(pattern='^(android|ios)$')
 
 class ScheduleInput(BaseModel):
     title: str = Field(default='', max_length=200)
@@ -729,6 +736,27 @@ def respond_invitation(application_id: uuid.UUID, req: InvitationResponse, user:
 def notifications(db: Session = Depends(get_db), user: models.User = Depends(user_or_401)):
     query = db.query(models.Notification).filter(models.Notification.user_id == user.id).order_by(models.Notification.created_at.desc()).limit(30)
     return [{'id': str(n.id), 'shift_id': str(n.shift_id) if n.shift_id else None, 'title': n.title, 'body': n.body, 'kind': n.kind, 'is_read': n.is_read, 'created_at': n.created_at.replace(tzinfo=timezone.utc).isoformat()} for n in query.all()]
+
+@app.post('/api/push-tokens', status_code=201)
+def register_push_token(req: PushTokenInput, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    previous_owner = db.query(models.PushToken).filter(models.PushToken.token == req.token, models.PushToken.user_id != user.id).first()
+    if previous_owner:
+        db.delete(previous_owner)
+        db.flush()
+    token = db.query(models.PushToken).filter_by(user_id=user.id).first()
+    if token:
+        token.token = req.token
+        token.platform = req.platform
+        token.registered_at = datetime.utcnow()
+    else:
+        db.add(models.PushToken(user_id=user.id, token=req.token, platform=req.platform))
+    db.commit()
+    return {'registered': True}
+
+@app.delete('/api/push-tokens', status_code=204)
+def remove_push_token(req: PushTokenInput, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    db.query(models.PushToken).filter_by(user_id=user.id, token=req.token).delete()
+    db.commit()
 
 @app.patch('/api/notifications/read-all')
 def read_all_notifications(db: Session = Depends(get_db), user: models.User = Depends(user_or_401)):

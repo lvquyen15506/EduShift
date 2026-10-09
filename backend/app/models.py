@@ -112,4 +112,14 @@ class Notification(Base):
     kind = Column(String(30), default='INFO')
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    push_attempts = Column(Integer, default=0, nullable=False)
+    push_next_attempt_at = Column(DateTime, nullable=True)
+    push_sent_at = Column(DateTime, nullable=True)
     user = relationship('User', back_populates='notifications')
+
+class PushToken(Base):
+    __tablename__ = 'push_tokens'
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    token = Column(String(250), unique=True, nullable=False)
+    platform = Column(String(20), nullable=False)
+    registered_at = Column(DateTime, default=datetime.utcnow, nullable=False)

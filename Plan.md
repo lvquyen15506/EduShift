@@ -70,9 +70,11 @@ Kết quả phase 8: 14 test API đạt trên PostgreSQL; web lint/build, mobile
 
 ## Giai đoạn 9 — thông báo push và phát hành
 
-1. [ ] Đăng ký Expo push token, gửi push khi có ca phù hợp hoặc thay đổi trạng thái đơn, xử lý lỗi/retry và vẫn lưu thông báo trong app.
+1. [x] Đăng ký Expo push token, gửi push khi có ca phù hợp hoặc thay đổi trạng thái đơn, xử lý lỗi/retry và vẫn lưu thông báo trong app. Đã kiểm thử bằng Expo Push Service giả lập; cần thử máy thật khi có EAS project.
 2. [ ] Chạy kiểm thử hồi quy API/web/mobile, kiểm tra responsive và đo hiệu năng theo yêu cầu tài liệu.
 3. [ ] Build APK/IPA bằng EAS, thử APK và TestFlight trên thiết bị thật; hoàn thiện hướng dẫn vận hành và CI/CD. Phụ thuộc Expo project/token, chứng chỉ Apple, API HTTPS và thiết bị.
+
+Kết quả cục bộ phase 9: 15 test API đạt trên PostgreSQL; web lint/build, mobile typecheck/lint, Expo Doctor 21/21 và export Android đạt. Test worker bao gồm gửi thành công, retry và nội dung push không chứa chi tiết riêng tư. Chưa có bằng chứng EAS cloud build, TestFlight, push trên máy thật hoặc tải 1.000 người dùng đồng thời; phase 9 chưa thể đánh dấu hoàn thành.
 
 ## Giai đoạn 10 — nghiệm thu toàn hệ thống
 

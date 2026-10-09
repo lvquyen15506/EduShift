@@ -15,6 +15,8 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8000 npx expo start
 
 Máy thật và máy chạy API phải cùng mạng khi dùng địa chỉ LAN. Thông tin đăng nhập cổng trường chỉ được gửi khi người dùng chọn đồng bộ, không lưu trong ứng dụng. Khi triển khai công khai, dùng HTTPS cho API.
 
+Push notification cần `EXPO_PROJECT_ID` trong EAS build và quyền thông báo trên thiết bị. App xin quyền sau khi sinh viên đăng nhập, đăng ký Expo push token với API và hủy khi đăng xuất. Nếu chưa có project ID hoặc người dùng từ chối quyền, thông báo vẫn xem được trong tab **Thông báo**. Kiểm tra push trên bản build native với API HTTPS; bundle export và Expo Go không xác nhận được giao hàng tới thiết bị.
+
 Kiểm tra trước khi gửi thay đổi:
 
 ```bash

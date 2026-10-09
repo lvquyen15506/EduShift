@@ -38,6 +38,10 @@ Tài khoản seed: `employer@edushift.vn / EduShift123!`, `sv001 / EduShift123!`
 | POST | `/api/applications/{id}/reviews` | Student/Employer | Đánh giá sau khi hoàn thành: `{rating: 1..5, comment?: string}` |
 | GET | `/api/notifications` | Có | Notification của user, có `shift_id` khi liên quan đến ca để mở chi tiết |
 | PATCH | `/api/notifications/read-all` | Có | Đánh dấu đã đọc |
+| POST | `/api/push-tokens` | Student | Đăng ký Expo push token của thiết bị: `{token, platform}` |
+| DELETE | `/api/push-tokens` | Student | Hủy token của chính thiết bị với cùng body |
+
+Thông báo luôn được lưu trong database để xem tại `/api/notifications`. Worker `python -m app.push_worker` gửi push chung chung qua Expo Push Service cho token sinh viên đăng ký trong 30 ngày gần nhất; không đưa tên ca hoặc nội dung riêng tư lên màn hình khóa. Worker thử lại tối đa 5 lần với thời gian chờ tăng dần khi Expo trả lỗi tạm thời, và xóa token khi Expo báo `DeviceNotRegistered`. Token chỉ dùng cho một tài khoản tại một thời điểm. Cần EAS project ID và bản build native trên thiết bị thật để kiểm tra push đầu cuối.
 
 ## Xác minh và vận hành tuyển dụng
 

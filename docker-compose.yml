@@ -26,6 +26,17 @@ services:
     volumes: [./backend:/app]
     command: sh -c "python -m seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     restart: unless-stopped
+  push-worker:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/edushift
+      JWT_SECRET: edushift-compose-secret-change-me
+    depends_on:
+      db: {condition: service_healthy}
+      api: {condition: service_started}
+    volumes: [./backend:/app]
+    command: python -m app.push_worker
+    restart: unless-stopped
   web:
     build:
       context: ./web-app

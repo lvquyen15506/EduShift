@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { api, ApiError } from './api';
+import { registerPushToken, removePushToken } from './push';
 
 const STORAGE_KEY = 'edushift.student.session';
 
@@ -68,9 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persist]);
 
   const signOut = useCallback(async () => {
+    if (session) await removePushToken(session.access_token).catch(() => {});
     await SecureStore.deleteItemAsync(STORAGE_KEY);
     setSession(null);
-  }, []);
+  }, [session]);
+
+  useEffect(() => {
+    if (session) void registerPushToken(session.access_token).catch(() => {});
+  }, [session]);
 
   const value = useMemo(() => ({ session, loading, signIn, signUp, signOut }), [session, loading, signIn, signUp, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
