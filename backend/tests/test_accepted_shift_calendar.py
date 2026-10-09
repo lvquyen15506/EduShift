@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_accepted_shift_appears_in_calendar_and_blocks_overbooking():
+def test_accepted_shift_appears_in_calendar_and_blocks_overbooking(verified_register):
     try:
         from app.database import SessionLocal, engine
         from app.models import User, Employer
@@ -27,7 +27,7 @@ def test_accepted_shift_appears_in_calendar_and_blocks_overbooking():
         username = marker + suffix
         body = {'role': role, 'username': username, 'password': 'TestPass123!'}
         body['full_name' if role == 'STUDENT' else 'company_name'] = username
-        response = client.post('/api/auth/register', json=body)
+        response = verified_register(client, body)
         assert response.status_code == 201, response.text
         created.append(username)
         if role == 'EMPLOYER':

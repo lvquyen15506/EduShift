@@ -123,3 +123,15 @@ class PushToken(Base):
     token = Column(String(250), unique=True, nullable=False)
     platform = Column(String(20), nullable=False)
     registered_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class EmailOtp(Base):
+    __tablename__ = 'email_otps'
+    __table_args__ = (UniqueConstraint('email', 'purpose', name='uq_email_otp_purpose'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, index=True)
+    purpose = Column(String(20), nullable=False)
+    code_hash = Column(String(64), nullable=False)
+    payload = Column(Text)
+    expires_at = Column(DateTime, nullable=False)
+    requested_at = Column(DateTime, nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)

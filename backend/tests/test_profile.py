@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_profile_and_avatar_round_trip():
+def test_profile_and_avatar_round_trip(verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -26,7 +26,7 @@ def test_profile_and_avatar_round_trip():
         username = marker + suffix
         body = {'role': role, 'username': username, 'password': 'TestPass123!'}
         body['full_name' if role == 'STUDENT' else 'company_name'] = username
-        response = client.post('/api/auth/register', json=body)
+        response = verified_register(client, body)
         assert response.status_code == 201, response.text
         created.append(response.json()['user_id'])
         return {'Authorization': 'Bearer ' + response.json()['access_token']}

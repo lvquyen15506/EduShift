@@ -1,51 +1,63 @@
 'use client';
-import { useState } from 'react';
+
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import styles from './register.module.css';
+
+type Role = 'STUDENT' | 'EMPLOYER';
 
 export default function RegisterPage() {
-  const [role, setRole] = useState('STUDENT');
+  const [role, setRole] = useState<Role>('STUDENT');
   const [name, setName] = useState('');
   const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [stage, setStage] = useState<'details' | 'verify'>('details');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const isStudent = role === 'STUDENT';
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const changeRole = (nextRole: Role) => {
+    setRole(nextRole);
+    setIdentifier('');
+    setName('');
+    setEmail('');
+    setPassword('');
     setError('');
+    setNotice('');
+  };
+
+  const post = async (path: string, body: unknown) => {
+    const res = await fetch((process.env.NEXT_PUBLIC_API_URL || '') + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Không thể thực hiện yêu cầu');
+    return data;
+  };
+
+  const requestCode = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    setError('');
+    setNotice('');
     setLoading(true);
-
-    // Nếu là sinh viên, coi identifier là username (MSSV). Nếu doanh nghiệp, coi là email.
-    const isStudent = role === 'STUDENT';
-    const payload = {
-      role,
-      password,
-      username: isStudent ? identifier : null,
-      email: !isStudent ? identifier : null,
-      full_name: isStudent ? name : null,
-      company_name: !isStudent ? name : null
-    };
-
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      await post('/api/auth/register', {
+        role,
+        password,
+        username: isStudent ? identifier.trim() : null,
+        email: email.trim().toLowerCase(),
+        full_name: isStudent ? name.trim() : null,
+        company_name: isStudent ? null : name.trim(),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        let errorMsg = 'Đăng ký thất bại';
-        if (data.detail) {
-          errorMsg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-        }
-        throw new Error(errorMsg);
-      }
-
-      alert('Đăng ký thành công! Hãy đăng nhập.');
-      router.push('/login');
+      setStage('verify');
+      setNotice('Mã OTP đã được gửi đến email. Mã có hiệu lực trong 10 phút.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi');
     } finally {
@@ -53,92 +65,122 @@ export default function RegisterPage() {
     }
   };
 
+  const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await post('/api/auth/register/verify', { email: email.trim().toLowerCase(), code: code.trim() });
+      window.alert('Email đã được xác nhận. Hãy đăng nhập để tiếp tục.');
+      router.push('/login');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Mã OTP không hợp lệ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-800">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary">Tạo tài khoản</h1>
-          <p className="text-sm text-gray-500 mt-2">Bắt đầu trải nghiệm EduShift</p>
-        </div>
+    <main className="auth-page">
+      <section className={styles.card} aria-labelledby="register-title">
+        <Link href="/" className={styles.brand} aria-label="Về trang chủ EduShift">
+          <span className="mark">E</span>
+          <span className="brand-name">Edu<span>Shift</span></span>
+        </Link>
 
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl mb-6">
+        <header className={styles.header}>
+          <span className={styles.eyebrow}>THAM GIA EDUSHIFT</span>
+          <h1 id="register-title">{stage === 'details' ? 'Tạo tài khoản' : 'Xác nhận email'}</h1>
+          <p>{stage === 'details'
+            ? 'Bắt đầu tìm ca làm phù hợp với lịch học của bạn.'
+            : 'Nhập mã 6 số đã gửi tới ' + email + '.'}</p>
+        </header>
+
+        {stage === 'details' && <div className={styles.roleSwitch} role="group" aria-label="Loại tài khoản">
           <button
             type="button"
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${role === 'STUDENT' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary' : 'text-gray-500'}`}
-            onClick={() => { setRole('STUDENT'); setIdentifier(''); setName(''); }}
+            className={styles.roleButton + (isStudent ? ' ' + styles.roleActive : '')}
+            aria-pressed={isStudent}
+            onClick={() => changeRole('STUDENT')}
           >
-            Sinh Viên
+            Sinh viên
           </button>
           <button
             type="button"
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${role === 'EMPLOYER' ? 'bg-white dark:bg-gray-700 shadow-sm text-primary' : 'text-gray-500'}`}
-            onClick={() => { setRole('EMPLOYER'); setIdentifier(''); setName(''); }}
+            className={styles.roleButton + (!isStudent ? ' ' + styles.roleActive : '')}
+            aria-pressed={!isStudent}
+            onClick={() => changeRole('EMPLOYER')}
           >
-            Doanh Nghiệp
+            Doanh nghiệp
           </button>
-        </div>
+        </div>}
 
-        {error && (
-          <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm mb-5 border border-red-100">
-            {error}
-          </div>
-        )}
+        {notice && <div className={styles.notice} role="status">{notice}</div>}
+        {error && <div className={styles.error} role="alert">{error}</div>}
 
-        <form onSubmit={handleRegister} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              {role === 'STUDENT' ? 'Họ và tên' : 'Tên doanh nghiệp'}
-            </label>
+        <form className={styles.form} onSubmit={stage === 'details' ? requestCode : verifyCode}>
+          {stage === 'details' ? <>
+          <div className={styles.field}>
+            <label htmlFor="register-name">{isStudent ? 'Họ và tên' : 'Tên doanh nghiệp'}</label>
             <input
+              id="register-name"
               type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all dark:bg-gray-800 dark:border-gray-700"
-              placeholder={role === 'STUDENT' ? 'Nguyễn Văn A' : 'Công ty TNHH EduShift'}
+              autoComplete={isStudent ? 'name' : 'organization'}
+              placeholder={isStudent ? 'Nguyễn Văn A' : 'Công ty TNHH EduShift'}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => setName(event.target.value)}
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              {role === 'STUDENT' ? 'Tên đăng nhập (MSSV)' : 'Email liên hệ'}
-            </label>
+          {isStudent && <div className={styles.field}>
+            <label htmlFor="register-identifier">Tên đăng nhập (MSSV)</label>
             <input
-              type={role === 'STUDENT' ? 'text' : 'email'}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all dark:bg-gray-800 dark:border-gray-700"
-              placeholder={role === 'STUDENT' ? 'VD: Mã sinh viên' : 'email@example.com'}
+              id="register-identifier"
+              type="text"
+              autoComplete="username"
+              placeholder="Ví dụ: 261800009"
               value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              onChange={(event) => setIdentifier(event.target.value)}
               required
             />
+          </div>}
+          <div className={styles.field}>
+            <label htmlFor="register-email">Email nhận mã OTP</label>
+            <input id="register-email" type="email" autoComplete="email" placeholder="ban@example.com"
+              value={email} onChange={(event) => setEmail(event.target.value)} required />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Mật khẩu</label>
+          <div className={styles.field}>
+            <label htmlFor="register-password">Mật khẩu</label>
             <input
+              id="register-password"
               type="password"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all dark:bg-gray-800 dark:border-gray-700"
-              placeholder="Tạo mật khẩu"
+              autoComplete="new-password"
+              minLength={6}
+              placeholder="Ít nhất 6 ký tự"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
             />
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-secondary hover:bg-opacity-90 disabled:opacity-50 text-white font-semibold py-3 rounded-xl shadow-lg shadow-secondary/30 transition-all hover:-translate-y-0.5 mt-2"
-          >
-            {loading ? 'Đang xử lý...' : 'Đăng ký ngay'}
+          </> : <div className={styles.field}>
+            <label htmlFor="register-code">Mã OTP</label>
+            <input id="register-code" type="text" inputMode="numeric" autoComplete="one-time-code"
+              pattern="[0-9]{6}" maxLength={6} placeholder="6 chữ số" value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} required />
+          </div>}
+          <button className={styles.submit} type="submit" disabled={loading}>
+            {loading ? 'Đang xử lý...' : stage === 'details' ? 'Gửi mã xác nhận' : 'Xác nhận và tạo tài khoản'}
           </button>
+          {stage === 'verify' && <div className={styles.otpActions}>
+            <button type="button" className={styles.textButton} disabled={loading}
+              onClick={() => { setStage('details'); setCode(''); setError(''); setNotice(''); }}>Sửa thông tin</button>
+            <button type="button" className={styles.textButton} disabled={loading}
+              onClick={() => { void requestCode(); }}>Gửi lại mã</button>
+          </div>}
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Đã có tài khoản?{' '}
-          <Link href="/login" className="text-primary font-semibold hover:underline">
-            Đăng nhập
-          </Link>
-        </p>
-      </div>
-    </div>
+        <p className={styles.footer}>Đã có tài khoản? <Link href="/login">Đăng nhập</Link></p>
+      </section>
+    </main>
   );
 }

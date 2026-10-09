@@ -2,9 +2,12 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 import base64
 import binascii
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import uuid
 from typing import Optional
 
@@ -13,11 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from sqlalchemy import or_, text
+from sqlalchemy import func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .database import Base, engine, get_db
 from . import models
+from .email_delivery import EmailDeliveryError, send_otp_email
 from .matching import match_student_shift, utc_naive
 from .school_calendar import SchoolCalendarError, fetch_school_calendar
 
@@ -79,7 +84,7 @@ app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, 
 
 class RegisterRequest(BaseModel):
     username: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: EmailStr
     password: str = Field(min_length=6)
     role: str
     full_name: Optional[str] = None
@@ -92,6 +97,16 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     identifier: str
     password: str
+
+class EmailOtpConfirm(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r'^\d{6}$')
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(EmailOtpConfirm):
+    new_password: str = Field(min_length=6)
 
 class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -250,27 +265,129 @@ def schedule_model(item: ScheduleInput, student_id: uuid.UUID):
 def health():
     return {'status': 'ok', 'service': 'edushift-api'}
 
-@app.post('/api/auth/register', status_code=201)
+def otp_digest(email: str, purpose: str, code: str) -> str:
+    value = f'{purpose}:{email}:{code}'.encode()
+    return hmac.new(SECRET_KEY.encode(), value, hashlib.sha256).hexdigest()
+
+
+def issue_email_otp(db: Session, email: str, purpose: str, payload: Optional[dict] = None) -> None:
+    now = datetime.utcnow()
+    item = db.query(models.EmailOtp).filter_by(email=email, purpose=purpose).with_for_update().first()
+    if item and item.requested_at > now - timedelta(seconds=60):
+        raise HTTPException(429, 'Vui lòng chờ 60 giây trước khi gửi lại mã')
+    code = f'{secrets.randbelow(1_000_000):06d}'
+    if not item:
+        item = models.EmailOtp(email=email, purpose=purpose)
+        db.add(item)
+    item.code_hash = otp_digest(email, purpose, code)
+    item.payload = json.dumps(payload, ensure_ascii=False) if payload else None
+    item.expires_at = now + timedelta(minutes=10)
+    item.requested_at = now
+    item.attempts = 0
+    db.flush()
+    try:
+        send_otp_email(email, code, purpose)
+    except EmailDeliveryError as exc:
+        db.rollback()
+        raise HTTPException(503, str(exc)) from exc
+    db.commit()
+
+
+def verified_email_otp(db: Session, email: str, purpose: str, code: str) -> models.EmailOtp:
+    item = db.query(models.EmailOtp).filter_by(email=email, purpose=purpose).with_for_update().first()
+    if not item:
+        raise HTTPException(400, 'Mã OTP không hợp lệ hoặc đã hết hạn')
+    if item.expires_at <= datetime.utcnow():
+        db.delete(item)
+        db.commit()
+        raise HTTPException(400, 'Mã OTP không hợp lệ hoặc đã hết hạn')
+    if not hmac.compare_digest(item.code_hash, otp_digest(email, purpose, code)):
+        item.attempts += 1
+        locked = item.attempts >= 5
+        if locked:
+            db.delete(item)
+        db.commit()
+        raise HTTPException(429 if locked else 400, 'Mã OTP không hợp lệ hoặc đã hết hạn')
+    return item
+
+
+@app.post('/api/auth/register', status_code=202)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     role = req.role.upper()
+    email = str(req.email).strip().lower()
     if role not in {'STUDENT', 'EMPLOYER'}:
         raise HTTPException(400, 'Role phải là STUDENT hoặc EMPLOYER')
-    if not req.username and not req.email:
-        raise HTTPException(400, 'Cần username hoặc email')
+    if role == 'STUDENT' and (not req.username or not req.full_name):
+        raise HTTPException(422, 'Sinh viên cần username và full_name')
+    if role == 'EMPLOYER' and not req.company_name:
+        raise HTTPException(422, 'Doanh nghiệp cần company_name')
     if req.username and db.query(models.User).filter(models.User.username == req.username).first():
         raise HTTPException(409, 'Username đã tồn tại')
-    if req.email and db.query(models.User).filter(models.User.email == str(req.email)).first():
+    if db.query(models.User).filter(func.lower(models.User.email) == email).first():
         raise HTTPException(409, 'Email đã tồn tại')
-    user = models.User(username=req.username, email=str(req.email) if req.email else None, password_hash=pwd_context.hash(req.password), role=role)
-    db.add(user); db.flush()
-    if role == 'STUDENT':
-        if not req.full_name: raise HTTPException(422, 'Sinh viên cần full_name')
-        db.add(models.Student(user_id=user.id, full_name=req.full_name, phone=req.phone, university=req.university, major=req.major))
-    else:
-        if not req.company_name: raise HTTPException(422, 'Doanh nghiệp cần company_name')
-        db.add(models.Employer(user_id=user.id, company_name=req.company_name, phone=req.phone, address=req.address))
+    payload = req.model_dump(mode='json', exclude={'password'})
+    payload['role'] = role
+    payload['email'] = email
+    payload['password_hash'] = pwd_context.hash(req.password)
+    issue_email_otp(db, email, 'REGISTER', payload)
+    return {'message': 'Đã gửi mã OTP đến email. Mã có hiệu lực trong 10 phút.'}
+
+
+@app.post('/api/auth/register/verify', status_code=201)
+def verify_registration(req: EmailOtpConfirm, db: Session = Depends(get_db)):
+    email = str(req.email).strip().lower()
+    item = verified_email_otp(db, email, 'REGISTER', req.code)
+    payload = json.loads(item.payload or '{}')
+    username = payload.get('username')
+    if (username and db.query(models.User).filter(models.User.username == username).first()
+            or db.query(models.User).filter(func.lower(models.User.email) == email).first()):
+        raise HTTPException(409, 'Tài khoản đã tồn tại')
+    user = models.User(username=username, email=email, password_hash=payload['password_hash'], role=payload['role'])
+    try:
+        db.add(user)
+        db.flush()
+        if user.role == 'STUDENT':
+            db.add(models.Student(user_id=user.id, full_name=payload['full_name'], phone=payload.get('phone'),
+                                  university=payload.get('university'), major=payload.get('major')))
+        else:
+            db.add(models.Employer(user_id=user.id, company_name=payload['company_name'],
+                                   phone=payload.get('phone'), address=payload.get('address')))
+        db.delete(item)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, 'Tài khoản đã tồn tại') from exc
+    return {'message': 'Đăng ký thành công', 'user_id': str(user.id), 'role': user.role,
+            'access_token': create_token(user), 'token_type': 'bearer'}
+
+
+@app.post('/api/auth/password-reset/request', status_code=202)
+def request_password_reset(req: PasswordResetRequest, db: Session = Depends(get_db)):
+    email = str(req.email).strip().lower()
+    message = {'message': 'Nếu email có tài khoản, mã OTP đã được gửi.'}
+    if not db.query(models.User).filter(func.lower(models.User.email) == email).first():
+        return message
+    recent = db.query(models.EmailOtp).filter_by(email=email, purpose='RESET').first()
+    if recent and recent.requested_at > datetime.utcnow() - timedelta(seconds=60):
+        return message
+    issue_email_otp(db, email, 'RESET')
+    return message
+
+
+@app.post('/api/auth/password-reset/confirm')
+def confirm_password_reset(req: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = str(req.email).strip().lower()
+    item = verified_email_otp(db, email, 'RESET', req.code)
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
+    if not user:
+        db.delete(item)
+        db.commit()
+        raise HTTPException(400, 'Mã OTP không hợp lệ hoặc đã hết hạn')
+    user.password_hash = pwd_context.hash(req.new_password)
+    db.delete(item)
     db.commit()
-    return {'message': 'Đăng ký thành công', 'user_id': str(user.id), 'role': role, 'access_token': create_token(user), 'token_type': 'bearer'}
+    return {'message': 'Đã đổi mật khẩu. Bạn có thể đăng nhập.'}
+
 
 @app.post('/api/auth/login')
 def login(req: LoginRequest, db: Session = Depends(get_db)):

@@ -1,0 +1,215 @@
+.card {
+  width: min(480px, 100%);
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--ink);
+  color-scheme: light;
+  box-shadow: 0 18px 50px #7f285d18;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 26px;
+}
+
+.header {
+  margin-bottom: 25px;
+}
+
+.eyebrow {
+  color: var(--magenta);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+
+.header h1 {
+  margin: 9px 0 7px;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -.7px;
+}
+
+.header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.roleSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 24px;
+  border-radius: 11px;
+  background: #fff0f5;
+}
+
+.roleButton {
+  min-height: 43px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: #604a55;
+  font-size: 14px;
+  font-weight: 650;
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+
+.roleButton:hover {
+  color: var(--magenta);
+}
+
+.roleButton:focus-visible,
+.submit:focus-visible,
+.footer a:focus-visible {
+  outline: 3px solid #e970a8;
+  outline-offset: 2px;
+}
+
+.roleActive {
+  background: #fff;
+  color: var(--magenta);
+  box-shadow: 0 2px 8px #7f285d16;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 14px;
+  border: 1px solid #d9c4ce;
+  border-radius: 10px;
+  outline: 0;
+  background: #fff;
+  color: var(--ink);
+  caret-color: var(--magenta);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.field input::placeholder {
+  color: #907d86;
+}
+
+.field input:focus {
+  border-color: var(--magenta);
+  box-shadow: 0 0 0 3px #b10e6b1b;
+}
+
+.submit {
+  min-height: 48px;
+  margin-top: 5px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  background: var(--magenta);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 750;
+  box-shadow: 0 8px 18px #b10e6b2b;
+  transition: background .2s, transform .2s;
+}
+
+.submit:hover:not(:disabled) {
+  background: #8e0753;
+  transform: translateY(-1px);
+}
+
+.submit:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.error {
+  margin-bottom: 18px;
+  padding: 11px 13px;
+  border: 1px solid #f1b6b1;
+  border-radius: 9px;
+  background: #fff2f0;
+  color: #9f1b1b;
+  font-size: 13px;
+}
+
+.notice {
+  margin-bottom: 18px;
+  padding: 11px 13px;
+  border: 1px solid #a8d8c1;
+  border-radius: 9px;
+  background: #ecfff5;
+  color: #17593b;
+  font-size: 13px;
+}
+
+.otpActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.textButton {
+  padding: 3px 0;
+  background: transparent;
+  color: var(--magenta);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.textButton:disabled { opacity: .55; cursor: wait; }
+.textButton:focus-visible { outline: 3px solid #e970a8; outline-offset: 2px; }
+
+.footer {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.footer a {
+  color: var(--magenta);
+  font-weight: 750;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 26px 22px;
+  }
+
+  .header h1 {
+    font-size: 27px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roleButton,
+  .field input,
+  .submit {
+    transition: none;
+  }
+}

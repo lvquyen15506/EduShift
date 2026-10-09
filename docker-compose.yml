@@ -21,10 +21,18 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/edushift
       JWT_SECRET: edushift-compose-secret-change-me
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: no-reply@edushift.local
     depends_on:
       db: {condition: service_healthy}
+      mailpit: {condition: service_started}
     volumes: [./backend:/app]
     command: sh -c "python -m seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    restart: unless-stopped
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["8025:8025"]
     restart: unless-stopped
   push-worker:
     build: ./backend

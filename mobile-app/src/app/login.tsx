@@ -36,6 +36,7 @@ export default function Login() {
         <TextInput style={styles.input} value={identifier} onChangeText={setIdentifier} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" placeholder="Mã sinh viên hoặc email" placeholderTextColor="#9b8790" />
         <Text style={styles.label}>Mật khẩu</Text>
         <TextInput style={styles.input} value={password} onChangeText={setPassword} secureTextEntry placeholder="Mật khẩu EduShift" placeholderTextColor="#9b8790" />
+        <Link href="/forgot-password" style={styles.forgot}>Quên mật khẩu?</Link>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <ActionButton title="Đăng nhập" onPress={submit} busy={busy} />
       </View>
@@ -60,4 +61,5 @@ const styles = StyleSheet.create({
   error: { color: colors.red, fontSize: 13, lineHeight: 19 },
   footer: { marginTop: 10, color: colors.muted, textAlign: 'center' },
   link: { color: colors.magenta, fontWeight: '700' },
+  forgot: { color: colors.magenta, fontWeight: '700', alignSelf: 'flex-end' },
 });

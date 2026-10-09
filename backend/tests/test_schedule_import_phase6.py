@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_import_deduplicates_and_preserves_accepted_shift():
+def test_import_deduplicates_and_preserves_accepted_shift(verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -26,7 +26,7 @@ def test_import_deduplicates_and_preserves_accepted_shift():
         username = marker + role.lower()
         body = {'role': role, 'username': username, 'password': 'TestPass123!'}
         body['full_name' if role == 'STUDENT' else 'company_name'] = username
-        response = client.post('/api/auth/register', json=body)
+        response = verified_register(client, body)
         assert response.status_code == 201, response.text
         registered.append(username)
         if role == 'EMPLOYER':

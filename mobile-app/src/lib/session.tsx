@@ -11,7 +11,8 @@ type AuthContextValue = {
   session: Session | null;
   loading: boolean;
   signIn: (identifier: string, password: string) => Promise<void>;
-  signUp: (fullName: string, username: string, password: string) => Promise<void>;
+  signUp: (fullName: string, username: string, email: string, password: string) => Promise<void>;
+  verifySignUp: (email: string, code: string, username: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -63,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persist(data, identifier);
   }, [persist]);
 
-  const signUp = useCallback(async (fullName: string, username: string, password: string) => {
-    const data = await api<LoginResponse>('/api/auth/register', { method: 'POST', body: { role: 'STUDENT', full_name: fullName, username, password } });
+  const signUp = useCallback(async (fullName: string, username: string, email: string, password: string) => {
+    await api('/api/auth/register', { method: 'POST', body: { role: 'STUDENT', full_name: fullName, username, email, password } });
+  }, []);
+
+  const verifySignUp = useCallback(async (email: string, code: string, username: string) => {
+    const data = await api<LoginResponse>('/api/auth/register/verify', { method: 'POST', body: { email, code } });
     await persist(data, username);
   }, [persist]);
 
@@ -78,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session) void registerPushToken(session.access_token).catch(() => {});
   }, [session]);
 
-  const value = useMemo(() => ({ session, loading, signIn, signUp, signOut }), [session, loading, signIn, signUp, signOut]);
+  const value = useMemo(() => ({ session, loading, signIn, signUp, verifySignUp, signOut }), [session, loading, signIn, signUp, verifySignUp, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

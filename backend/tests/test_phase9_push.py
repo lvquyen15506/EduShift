@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 
-def test_push_delivery(monkeypatch):
+def test_push_delivery(monkeypatch, verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -20,7 +20,7 @@ def test_push_delivery(monkeypatch):
 
     client = TestClient(app)
     username = 'push_' + uuid.uuid4().hex[:12]
-    response = client.post('/api/auth/register', json={'role': 'STUDENT', 'username': username, 'password': 'TestPass123!', 'full_name': username})
+    response = verified_register(client, {'role': 'STUDENT', 'username': username, 'password': 'TestPass123!', 'full_name': username})
     assert response.status_code == 201, response.text
     user_id = uuid.UUID(response.json()['user_id'])
     headers = {'Authorization': 'Bearer ' + response.json()['access_token']}

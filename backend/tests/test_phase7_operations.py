@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_verified_employer_invites_and_decides_applications():
+def test_verified_employer_invites_and_decides_applications(verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -26,7 +26,7 @@ def test_verified_employer_invites_and_decides_applications():
         username = marker + suffix
         body = {'role': role, 'username': username, 'password': 'TestPass123!'}
         body['full_name' if role == 'STUDENT' else 'company_name'] = username
-        response = client.post('/api/auth/register', json=body)
+        response = verified_register(client, body)
         assert response.status_code == 201, response.text
         users.append(username)
         return response.json()['user_id'], {'Authorization': 'Bearer ' + response.json()['access_token']}

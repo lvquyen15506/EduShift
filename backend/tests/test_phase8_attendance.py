@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_attendance_reviews_and_private_location():
+def test_attendance_reviews_and_private_location(verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -26,7 +26,7 @@ def test_attendance_reviews_and_private_location():
         name = marker + suffix
         payload = {'username': name, 'password': 'TestPass123!', 'role': role}
         payload['full_name' if role == 'STUDENT' else 'company_name'] = name
-        result = client.post('/api/auth/register', json=payload)
+        result = verified_register(client, payload)
         assert result.status_code == 201, result.text
         names.append(name)
         return result.json()['user_id'], {'Authorization': 'Bearer ' + result.json()['access_token']}

@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_employer_shift_notifies_student_and_student_applies():
+def test_employer_shift_notifies_student_and_student_applies(verified_register):
     try:
         from app.database import SessionLocal, engine
         with engine.connect() as connection:
@@ -26,7 +26,7 @@ def test_employer_shift_notifies_student_and_student_applies():
         username = marker + '_' + role.lower()
         body = {'role': role, 'username': username, 'password': 'TestPass123!'}
         body['full_name' if role == 'STUDENT' else 'company_name'] = username
-        response = client.post('/api/auth/register', json=body)
+        response = verified_register(client, body)
         assert response.status_code == 201, response.text
         created.append(response.json()['user_id'])
         if role == 'EMPLOYER':
