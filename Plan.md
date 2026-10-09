@@ -61,10 +61,12 @@ Kết quả phase 7: 12 test API đạt trên PostgreSQL; web lint/build, mobile
 
 ## Giai đoạn 8 — thực hiện ca, đánh giá và vị trí
 
-1. [ ] Sinh viên check-in/check-out ca đã nhận; doanh nghiệp xác nhận hoàn thành và xem chấm công.
-2. [ ] Hai phía đánh giá sau ca; điểm đánh giá sinh viên lấy từ review thật, không dùng điểm giả.
-3. [ ] Bổ sung tọa độ tự nguyện và khoảng cách vào Match Score khi có dữ liệu; giải thích điểm và giữ quyền riêng tư vị trí.
-4. [ ] Kiểm thử toàn bộ trạng thái ca, review, khoảng cách và hiệu năng matching. Sửa đến khi đạt.
+1. [x] Sinh viên check-in/check-out ca đã nhận; doanh nghiệp xác nhận hoàn thành và xem chấm công.
+2. [x] Hai phía đánh giá sau ca; điểm đánh giá sinh viên lấy từ review thật, không dùng điểm giả.
+3. [x] Bổ sung tọa độ tự nguyện và khoảng cách theo mức vào Match Score khi có dữ liệu; không trả tọa độ sinh viên cho doanh nghiệp.
+4. [x] Kiểm thử trạng thái ca, quyền, review, khoảng cách và hiệu năng hàm matching.
+
+Kết quả phase 8: 14 test API đạt trên PostgreSQL; web lint/build, mobile typecheck/lint, Expo Doctor 21/21 và export Android đạt. 1.000 phép tính matching với dữ liệu mẫu mất 0,0073 giây trên máy phát triển; đây không phải phép đo API dưới tải đồng thời. Thử thiết bị thật và tải đồng thời thuộc phase 9–10.
 
 ## Giai đoạn 9 — thông báo push và phát hành
 
@@ -84,8 +86,8 @@ Mỗi phase chỉ đánh dấu hoàn thành khi test liên quan đạt. Lỗi ph
 
 - API nhận thời gian ISO 8601; backend lưu UTC dạng `timestamp` không timezone như schema hiện tại.
 - Lịch `STUDY` và `BUSY` chặn ca làm nếu giao nhau. Lịch `FREE` là khung giờ sẵn sàng; nếu đã khai báo lịch `FREE`, ca phải nằm trọn trong một hoặc nhiều khung giờ rảnh liên tiếp.
-- Match Score từ 0 đến 100: lịch rảnh 60, kỹ năng 25, đánh giá 15. Ca xung đột lịch hoặc ngoài khung giờ rảnh nhận 0 điểm và không được gợi ý.
-- Chưa có tọa độ hoặc API định vị nên khoảng cách chỉ được ghi là việc tiếp theo, chưa đưa vào điểm để tránh số liệu giả.
+- Match Score từ 0 đến 100: lịch rảnh 60, kỹ năng 25, đánh giá thật 15; chưa có review thì không cộng điểm đánh giá. Khi có tọa độ tự nguyện của cả sinh viên và ca, điểm cơ bản chiếm 90% và khoảng cách theo mức cộng tối đa 10 điểm. Ca xung đột lịch hoặc ngoài khung giờ rảnh nhận 0 điểm.
+- Tọa độ sinh viên chỉ thuộc hồ sơ cá nhân; API ứng viên chỉ trả mức khoảng cách gần đúng trong lý do khớp, không trả tọa độ.
 
 ## Kiểm chứng
 

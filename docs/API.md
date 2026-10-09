@@ -25,12 +25,17 @@ Tài khoản seed: `employer@edushift.vn / EduShift123!`, `sv001 / EduShift123!`
 | DELETE | `/api/schedules/{id}` | Student | Xóa một mục lịch của mình |
 | GET | `/api/shifts` | Có | Danh sách ca; `?status=OPEN` |
 | POST | `/api/shifts` | Employer | Tạo ca |
-| GET | `/api/shifts/{id}` | Có | Chi tiết ca; sinh viên nhận thêm Match Score, lý do khớp, `available`, `applied`; doanh nghiệp chỉ xem ca của mình |
+| GET | `/api/shifts/{id}` | Có | Chi tiết ca; sinh viên nhận thêm Match Score và trạng thái chấm công nếu đã nhận ca |
 | GET | `/api/candidates` | Employer | Ứng viên phù hợp với `?shift_id=<UUID>`; mặc định ca mở mới nhất của mình |
 | POST | `/api/applications` | Student | Ứng tuyển `{shift_id}` |
 | GET | `/api/shifts/{id}/applications` | Employer | Danh sách đơn ứng tuyển của ca do mình đăng |
 | PATCH | `/api/applications/{id}/accept` | Employer | Chấp nhận đơn đang chờ và tự xếp ca vào lịch sinh viên |
 | GET | `/api/student/applications` | Student | Danh sách đơn ứng tuyển của mình |
+| PUT | `/api/student/location` | Student | Lưu/xóa tọa độ tự nguyện bằng `{latitude, longitude}`; cả hai là `null` để xóa |
+| PATCH | `/api/applications/{id}/check-in` | Student | Check-in ca đã nhận từ 30 phút trước đến giờ kết thúc |
+| PATCH | `/api/applications/{id}/check-out` | Student | Check-out sau giờ kết thúc khi đã check-in |
+| PATCH | `/api/applications/{id}/complete` | Employer | Xác nhận chấm công sau check-out |
+| POST | `/api/applications/{id}/reviews` | Student/Employer | Đánh giá sau khi hoàn thành: `{rating: 1..5, comment?: string}` |
 | GET | `/api/notifications` | Có | Notification của user, có `shift_id` khi liên quan đến ca để mở chi tiết |
 | PATCH | `/api/notifications/read-all` | Có | Đánh dấu đã đọc |
 
@@ -41,6 +46,11 @@ Quản trị viên dùng PATCH /api/admin/employers/{id}/verify với is_verifie
 Chủ ca dùng PATCH /api/shifts/{id}/status với status OPEN hoặc CLOSED để mở hay đóng tuyển. Ca tự chuyển FULL khi đã nhận đủ người và không thể mở lại khi hết chỗ.
 
 Chủ ca dùng POST /api/shifts/{id}/invitations với student_id để mời sinh viên phù hợp. Sinh viên trả lời qua PATCH /api/applications/{id}/respond với accept true hoặc false; khi nhận lời, ca được xếp vào lịch. Doanh nghiệp có thể dùng PATCH /api/applications/{id}/reject để từ chối đơn đang chờ.
+
+## Chấm công và đánh giá
+
+Sinh viên đã nhận ca có thể check-in trong khoảng từ 30 phút trước giờ bắt đầu đến giờ kết thúc. Check-out chỉ được phép sau giờ kết thúc. Doanh nghiệp xem mốc chấm công trong danh sách đơn và xác nhận hoàn thành sau check-out. Mỗi phía chỉ đánh giá một lần, từ 1 đến 5 sao, sau khi đơn thành `COMPLETED`. Trung bình sao của sinh viên và doanh nghiệp được tính từ review đã lưu.
+
 
 ## Lỗi
 
@@ -59,7 +69,7 @@ POST /api/schedules/import
 }
 ```
 
-Thời gian có múi giờ được đổi sang UTC trước khi lưu. `STUDY` và `BUSY` chặn ca giao nhau; nếu có lịch `FREE`, ca phải nằm trọn trong thời gian rảnh. Điểm gồm lịch 60, kỹ năng 25, đánh giá 15; xung đột thời gian được 0. Điểm chỉ dùng dữ liệu đang có: khoảng cách chưa được tính vì chưa có tọa độ. API ứng viên không trả lịch cá nhân.
+Thời gian có múi giờ được đổi sang UTC trước khi lưu. `STUDY` và `BUSY` chặn ca giao nhau; nếu có lịch `FREE`, ca phải nằm trọn trong thời gian rảnh. Điểm cơ bản gồm lịch 60, kỹ năng 25, đánh giá 15; xung đột thời gian được 0. Điểm đánh giá chỉ lấy từ review thật; sinh viên chưa có review không được gán sẵn 5 sao. Khi cả hai phía tự nhập tọa độ, điểm cơ bản chiếm 90% và khoảng cách theo bốn mức chiếm tối đa 10 điểm. API ứng viên không trả lịch hay tọa độ cá nhân.
 
 `POST /api/shifts` trả thêm `matched_students` và tạo thông báo cho sinh viên có điểm từ 80. Điểm ở `/api/applications` được tính lại khi ứng tuyển để phản ánh lịch mới nhất.
 
@@ -67,6 +77,6 @@ Thời gian có múi giờ được đổi sang UTC trước khi lưu. `STUDY` v
 
 `GET /api/shifts/{id}` yêu cầu đăng nhập. Sinh viên chỉ xem được ca mở hoặc ca mình đã ứng tuyển. Với sinh viên, `available` cho biết lịch có cho phép ứng tuyển hay không, còn `applied` dùng để vô hiệu hóa nút ứng tuyển lại. Backend vẫn kiểm tra trạng thái ca, giờ bắt đầu, lịch và đơn trùng tại `POST /api/applications`. Thời gian lịch và thông báo cũng trả kèm múi giờ UTC.
 
-Khi doanh nghiệp chấp nhận đơn đang `PENDING`, API kiểm tra quyền sở hữu ca, số chỗ còn lại và lịch mới nhất của sinh viên. Đơn chuyển sang `ACCEPTED`; `GET /api/schedules` tự có thêm mục `type: "WORK"`, `source: "SHIFT"`, `application_id` tương ứng ca đã nhận. Mục này chặn các ca trùng giờ khi matching. Khung `FREE` gốc được giữ để thấy ca được xếp trong giờ rảnh; mục `WORK` không thể xóa thủ công và không bị xóa khi nhập lịch với `replace=true` hoặc đồng bộ trường. Sinh viên nhận thông báo ca đã được duyệt.
+Khi doanh nghiệp chấp nhận đơn đang `PENDING`, API kiểm tra quyền sở hữu ca, số chỗ còn lại và lịch mới nhất của sinh viên. Đơn chuyển sang `ACCEPTED`; `GET /api/schedules` tự có thêm mục `type: "WORK"`, `source: "SHIFT"`, `application_id` và `shift_id` tương ứng ca đã nhận. Mục này chặn các ca trùng giờ khi matching. Khung `FREE` gốc được giữ để thấy ca được xếp trong giờ rảnh; mục `WORK` không thể xóa thủ công và không bị xóa khi nhập lịch với `replace=true` hoặc đồng bộ trường. Sinh viên nhận thông báo ca đã được duyệt.
 
 Đồng bộ cổng trường: `POST /api/schedules/sync-school` với body `{"username":"<mã sinh viên>","password":"<mật khẩu cổng trường>"}`. API đọc cấu trúc `date`/`timelearn`/`title`/`desc` của NoteClass, đổi giờ Việt Nam sang UTC, và thay riêng các mục có `source: "SCHOOL"`. Lịch nhập tay (`source: "MANUAL"`) được giữ lại. Thông tin đăng nhập cổng trường chỉ dùng trong lần gọi này, không lưu vào database; triển khai công khai cần HTTPS.

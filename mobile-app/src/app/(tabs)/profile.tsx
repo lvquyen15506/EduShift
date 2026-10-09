@@ -12,7 +12,7 @@ type StudentAccount = {
   username: string | null;
   email: string | null;
   avatar_data: string | null;
-  profile: { full_name: string; phone: string | null; university: string | null; major: string | null; skills: string | null };
+  profile: { full_name: string; phone: string | null; university: string | null; major: string | null; skills: string | null; latitude: number | null; longitude: number | null };
 };
 type Field = 'full_name' | 'phone' | 'university' | 'major' | 'skills' | 'email';
 const labels: [Field, string][] = [
@@ -28,6 +28,8 @@ export default function Profile() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -36,6 +38,8 @@ export default function Profile() {
       const next = await api<StudentAccount>('/api/auth/me', { token: session.access_token });
       setAccount(next);
       setFields({ full_name: next.profile.full_name || '', email: next.email || '', phone: next.profile.phone || '', university: next.profile.university || '', major: next.profile.major || '', skills: next.profile.skills || '' });
+      setLatitude(next.profile.latitude == null ? '' : String(next.profile.latitude));
+      setLongitude(next.profile.longitude == null ? '' : String(next.profile.longitude));
       setError('');
     } catch (cause) { setError(errorMessage(cause)); }
     finally { setLoading(false); }
@@ -45,6 +49,7 @@ export default function Profile() {
   async function save() {
     if (!session || busy) return;
     if (!fields.full_name.trim()) { setError('Họ và tên không được để trống.'); return; }
+    if (Boolean(latitude.trim()) !== Boolean(longitude.trim()) || (latitude.trim() && (!Number.isFinite(Number(latitude)) || Math.abs(Number(latitude)) > 90 || !Number.isFinite(Number(longitude)) || Math.abs(Number(longitude)) > 180))) { setError('Nhập đủ vĩ độ (-90 đến 90) và kinh độ (-180 đến 180), hoặc để trống cả hai.'); return; }
     setBusy(true); setError(''); setSuccess('');
     try {
       const next = await api<StudentAccount>('/api/auth/profile', { method: 'PATCH', token: session.access_token, body: {
@@ -52,6 +57,7 @@ export default function Profile() {
         phone: fields.phone.trim(), university: fields.university.trim(),
         major: fields.major.trim(), skills: fields.skills.trim(),
       } });
+      await api('/api/student/location', { method: 'PUT', token: session.access_token, body: { latitude: latitude.trim() ? Number(latitude) : null, longitude: longitude.trim() ? Number(longitude) : null } });
       setAccount(next); setSuccess('Đã lưu hồ sơ.');
     } catch (cause) { setError(errorMessage(cause)); }
     finally { setBusy(false); }
@@ -81,7 +87,7 @@ export default function Profile() {
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.eyebrow}>TÀI KHOẢN SINH VIÊN</Text><Text style={styles.heading}>Hồ sơ của tôi</Text>
     <View style={styles.avatarBox}>{account.avatar_data ? <Image source={{ uri: account.avatar_data }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.initial}>{account.profile.full_name.trim().slice(0, 1).toUpperCase()}</Text></View>}<Text style={styles.username}>{account.username || account.email}</Text><ActionButton title="Đổi ảnh đại diện" secondary onPress={() => { void chooseAvatar(); }} busy={busy} /></View>
-    <View style={styles.card}>{labels.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={fields[key]} onChangeText={value => setFields(current => ({ ...current, [key]: value }))} autoCapitalize={key === 'email' ? 'none' : 'sentences'} keyboardType={key === 'email' ? 'email-address' : key === 'phone' ? 'phone-pad' : 'default'} /></View>)}
+    <View style={styles.card}>{labels.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={fields[key]} onChangeText={value => setFields(current => ({ ...current, [key]: value }))} autoCapitalize={key === 'email' ? 'none' : 'sentences'} keyboardType={key === 'email' ? 'email-address' : key === 'phone' ? 'phone-pad' : 'default'} /></View>)}<Text style={styles.label}>Vị trí gần đúng (tùy chọn)</Text><Text style={styles.username}>Chỉ dùng để ước tính điểm khoảng cách. Doanh nghiệp không thấy tọa độ của bạn. Có thể xóa bằng cách để trống cả hai ô.</Text><TextInput style={styles.input} value={latitude} onChangeText={setLatitude} keyboardType="numbers-and-punctuation" placeholder="Vĩ độ, ví dụ 21.0285" /><TextInput style={styles.input} value={longitude} onChangeText={setLongitude} keyboardType="numbers-and-punctuation" placeholder="Kinh độ, ví dụ 105.8542" />
       {error ? <Text style={styles.error}>{error}</Text> : null}{success ? <Text style={styles.success}>{success}</Text> : null}<ActionButton title="Lưu hồ sơ" onPress={() => { void save(); }} busy={busy} /></View>
     <ActionButton title="Đăng xuất" secondary onPress={() => { void signOut(); }} />
   </ScrollView>;

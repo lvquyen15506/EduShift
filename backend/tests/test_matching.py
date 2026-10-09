@@ -42,3 +42,18 @@ def test_score_uses_actual_skills_rating_and_availability():
 def test_aware_datetimes_are_normalized_to_utc():
     local = datetime(2026, 10, 12, 15, tzinfo=timezone(timedelta(hours=7)))
     assert utc_naive(local) == START
+
+
+def test_unreviewed_students_have_no_invented_rating_and_distance_is_banded():
+    unreviewed = student(rating=None)
+    assert match_student_shift(unreviewed, shift())['score'] == 73
+    unreviewed.latitude, unreviewed.longitude = 21.0285, 105.8542
+    nearby = shift()
+    nearby.latitude, nearby.longitude = 21.029, 105.855
+    far = shift()
+    far.latitude, far.longitude = 22.0, 106.0
+    close_match = match_student_shift(unreviewed, nearby)
+    far_match = match_student_shift(unreviewed, far)
+    assert close_match['score'] > far_match['score']
+    assert 'dưới 5 km' in close_match['reasons'][-1]
+    assert all('Đánh giá thật' not in reason for reason in close_match['reasons'])

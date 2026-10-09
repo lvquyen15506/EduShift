@@ -26,7 +26,9 @@ class Student(Base):
     university = Column(String(200))
     major = Column(String(200))
     skills = Column(Text, default='')
-    average_rating = Column(Float, default=5.0)
+    average_rating = Column(Float, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     user = relationship('User', back_populates='student_profile')
     schedules = relationship('Schedule', back_populates='student', cascade='all, delete-orphan')
     applications = relationship('Application', back_populates='student', cascade='all, delete-orphan')
@@ -38,6 +40,7 @@ class Employer(Base):
     address = Column(String(300))
     phone = Column(String(30))
     is_verified = Column(Boolean, default=False)
+    average_rating = Column(Float, nullable=True)
     user = relationship('User', back_populates='employer_profile')
     shifts = relationship('JobShift', back_populates='employer', cascade='all, delete-orphan')
 
@@ -52,6 +55,7 @@ class Schedule(Base):
     source = Column(String(20), nullable=False, default='MANUAL')
     application_id = Column(UUID(as_uuid=True), ForeignKey('applications.id', ondelete='CASCADE'), unique=True, nullable=True)
     student = relationship('Student', back_populates='schedules')
+    application = relationship('Application')
 
 class JobShift(Base):
     __tablename__ = 'shifts'
@@ -65,6 +69,8 @@ class JobShift(Base):
     hourly_rate = Column(Float)
     required_workers = Column(Integer, default=1)
     required_skills = Column(Text, default='')
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     status = Column(String(20), default='OPEN')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     employer = relationship('Employer', back_populates='shifts')
@@ -80,8 +86,21 @@ class Application(Base):
     match_reasons = Column(Text, default='')
     status = Column(String(20), default='PENDING')
     applied_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    checked_in_at = Column(DateTime, nullable=True)
+    checked_out_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
     student = relationship('Student', back_populates='applications')
     shift = relationship('JobShift', back_populates='applications')
+
+class Review(Base):
+    __tablename__ = 'reviews'
+    __table_args__ = (UniqueConstraint('application_id', 'reviewer_role', name='uq_review_application_role'),)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    application_id = Column(UUID(as_uuid=True), ForeignKey('applications.id', ondelete='CASCADE'), nullable=False)
+    reviewer_role = Column(String(20), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text, default='')
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Notification(Base):
     __tablename__ = 'notifications'

@@ -4,6 +4,7 @@ export type ScheduleItem = {
   type: 'STUDY' | 'BUSY' | 'FREE' | 'WORK';
   source: 'SCHOOL' | 'MANUAL' | 'SHIFT';
   application_id?: string | null;
+  shift_id?: string | null;
   start_time: string;
   end_time: string;
 };
@@ -30,6 +31,12 @@ export type ShiftDetail = Shift & {
   available: boolean;
   applied: boolean;
   invitation_id?: string | null;
+  application_id?: string | null;
+  application_status?: 'ACCEPTED' | 'COMPLETED';
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+  completed_at?: string | null;
+  reviewed?: boolean;
 };
 
 export type StudentDashboard = {

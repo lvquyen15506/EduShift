@@ -30,7 +30,11 @@ def migrate_schema():
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS phone VARCHAR(30)",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS major VARCHAR(200)",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS skills TEXT DEFAULT ''",
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS average_rating FLOAT DEFAULT 5.0",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS average_rating FLOAT",
+        "ALTER TABLE students ALTER COLUMN average_rating DROP DEFAULT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS latitude FLOAT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS longitude FLOAT",
+        "ALTER TABLE employers ADD COLUMN IF NOT EXISTS average_rating FLOAT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS location VARCHAR(300)",
@@ -39,9 +43,14 @@ def migrate_schema():
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS required_skills TEXT DEFAULT ''",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS required_workers INTEGER DEFAULT 1",
+        "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS latitude FLOAT",
+        "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS longitude FLOAT",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS match_reasons TEXT DEFAULT ''",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'PENDING'",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMP",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind VARCHAR(30) DEFAULT 'INFO'",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS shift_id UUID",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
@@ -50,6 +59,7 @@ def migrate_schema():
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'MANUAL'",
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS application_id UUID REFERENCES applications(id) ON DELETE CASCADE",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_schedules_application_id ON schedules(application_id)",
+        "UPDATE students SET average_rating = NULL WHERE average_rating = 5 AND NOT EXISTS (SELECT 1 FROM reviews r JOIN applications a ON a.id = r.application_id WHERE a.student_id = students.user_id AND r.reviewer_role = 'EMPLOYER')",
     ]
     with engine.begin() as connection:
         for statement in statements:
@@ -104,6 +114,15 @@ class ShiftCreate(BaseModel):
     hourly_rate: float = 0
     required_workers: int = Field(default=1, ge=1)
     required_skills: list[str] = []
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    @field_validator('longitude')
+    @classmethod
+    def coordinate_pair(cls, value: Optional[float], info):
+        if (value is None) != (info.data.get('latitude') is None):
+            raise ValueError('Cần nhập đủ vĩ độ và kinh độ')
+        return value
 
 class ShiftOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -133,6 +152,21 @@ class ShiftStatusUpdate(BaseModel):
 
 class VerificationUpdate(BaseModel):
     is_verified: bool
+
+class LocationUpdate(BaseModel):
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    @field_validator('longitude')
+    @classmethod
+    def coordinate_pair(cls, value: Optional[float], info):
+        if (value is None) != (info.data.get('latitude') is None):
+            raise ValueError('Cần nhập đủ vĩ độ và kinh độ')
+        return value
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str = Field(default='', max_length=1000)
 
 class ScheduleInput(BaseModel):
     title: str = Field(default='', max_length=200)
@@ -197,7 +231,7 @@ def shift_dict(shift: models.JobShift):
     return {**data, 'company_name': shift.employer.company_name, 'required_skills': [x for x in (shift.required_skills or '').split(',') if x], 'applicants': len(shift.applications)}
 
 def schedule_dict(item: models.Schedule):
-    return {'id': item.id, 'title': item.title, 'type': item.type, 'source': item.source, 'application_id': item.application_id, 'start_time': item.start_time.replace(tzinfo=timezone.utc), 'end_time': item.end_time.replace(tzinfo=timezone.utc)}
+    return {'id': item.id, 'title': item.title, 'type': item.type, 'source': item.source, 'application_id': item.application_id, 'shift_id': item.application.shift_id if item.application else None, 'start_time': item.start_time.replace(tzinfo=timezone.utc), 'end_time': item.end_time.replace(tzinfo=timezone.utc)}
 
 def schedule_model(item: ScheduleInput, student_id: uuid.UUID):
     start, end = utc_naive(item.start_time), utc_naive(item.end_time)
@@ -429,7 +463,14 @@ def verify_employer(employer_id: uuid.UUID, req: VerificationUpdate, user: model
 @app.get('/api/student/applications')
 def student_applications(user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
     applications = db.query(models.Application).filter(models.Application.student_id == user.id).order_by(models.Application.applied_at.desc()).all()
-    return [{'id': str(a.id), 'shift_id': str(a.shift_id), 'title': a.shift.title, 'company_name': a.shift.employer.company_name, 'location': a.shift.location, 'start_time': a.shift.start_time.isoformat(), 'status': a.status, 'match_score': a.match_score, 'applied_at': a.applied_at.isoformat()} for a in applications]
+    return [{'id': str(a.id), 'shift_id': str(a.shift_id), 'title': a.shift.title, 'company_name': a.shift.employer.company_name, 'location': a.shift.location, 'start_time': a.shift.start_time.isoformat(), 'status': a.status, 'match_score': a.match_score, 'applied_at': a.applied_at.isoformat(), 'checked_in_at': a.checked_in_at, 'checked_out_at': a.checked_out_at, 'completed_at': a.completed_at} for a in applications]
+
+@app.put('/api/student/location')
+def update_student_location(req: LocationUpdate, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    user.student_profile.latitude = req.latitude
+    user.student_profile.longitude = req.longitude
+    db.commit()
+    return {'latitude': req.latitude, 'longitude': req.longitude}
 
 @app.get('/api/shifts')
 def list_shifts(status_filter: Optional[str] = Query(default=None, alias='status'), user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
@@ -446,7 +487,7 @@ def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db:
     if not user.employer_profile.is_verified: raise HTTPException(403, 'Doanh nghiệp cần được xác minh trước khi đăng ca')
     start, end = utc_naive(req.start_time), utc_naive(req.end_time)
     if end <= start: raise HTTPException(422, 'Giờ kết thúc phải sau giờ bắt đầu')
-    shift = models.JobShift(employer_id=user.id, title=req.title, description=req.description, location=req.location, start_time=start, end_time=end, hourly_rate=req.hourly_rate, required_workers=req.required_workers, required_skills=','.join(req.required_skills))
+    shift = models.JobShift(employer_id=user.id, title=req.title, description=req.description, location=req.location, start_time=start, end_time=end, hourly_rate=req.hourly_rate, required_workers=req.required_workers, required_skills=','.join(req.required_skills), latitude=req.latitude, longitude=req.longitude)
     db.add(shift); db.flush()
     students = db.query(models.Student).options(selectinload(models.Student.schedules)).all()
     matched = 0
@@ -487,8 +528,9 @@ def get_shift(shift_id: uuid.UUID, user: models.User = Depends(user_or_401), db:
         if shift.status != 'OPEN' and not own_application:
             raise HTTPException(404, 'Không tìm thấy ca làm')
         match = match_student_shift(user.student_profile, shift)
-        if own_application and own_application.status == 'ACCEPTED':
-            return {**shift_dict(shift), 'match_score': own_application.match_score, 'match_reasons': own_application.match_reasons.split(', '), 'available': False, 'applied': True}
+        if own_application and own_application.status in {'ACCEPTED', 'COMPLETED'}:
+            reviewed = db.query(models.Review).filter_by(application_id=own_application.id, reviewer_role='STUDENT').first() is not None
+            return {**shift_dict(shift), 'match_score': own_application.match_score, 'match_reasons': own_application.match_reasons.split(', '), 'available': False, 'applied': True, 'application_id': str(own_application.id), 'application_status': own_application.status, 'checked_in_at': own_application.checked_in_at, 'checked_out_at': own_application.checked_out_at, 'completed_at': own_application.completed_at, 'reviewed': reviewed}
         return {**shift_dict(shift), 'match_score': match['score'], 'match_reasons': match['reasons'], 'available': match['available'], 'applied': bool(own_application and own_application.status != 'INVITED'), 'invitation_id': str(own_application.id) if own_application and own_application.status == 'INVITED' else None}
     if user.role not in {'EMPLOYER', 'ADMIN'}:
         raise HTTPException(403, 'Tài khoản không có quyền truy cập')
@@ -550,7 +592,75 @@ def shift_applications(shift_id: uuid.UUID, user: models.User = Depends(require_
     if not shift:
         raise HTTPException(404, 'Không tìm thấy ca làm')
     applications = db.query(models.Application).filter(models.Application.shift_id == shift_id).order_by(models.Application.applied_at.desc()).all()
-    return [{'id': str(item.id), 'student_id': str(item.student_id), 'name': item.student.full_name, 'university': item.student.university, 'status': item.status, 'match_score': item.match_score, 'applied_at': item.applied_at.replace(tzinfo=timezone.utc).isoformat()} for item in applications]
+    reviewed_ids = {review.application_id for review in db.query(models.Review).filter(models.Review.reviewer_role == 'EMPLOYER', models.Review.application_id.in_([item.id for item in applications])).all()}
+    return [{'id': str(item.id), 'student_id': str(item.student_id), 'name': item.student.full_name, 'university': item.student.university, 'status': item.status, 'match_score': item.match_score, 'applied_at': item.applied_at.replace(tzinfo=timezone.utc).isoformat(), 'checked_in_at': item.checked_in_at, 'checked_out_at': item.checked_out_at, 'completed_at': item.completed_at, 'reviewed': item.id in reviewed_ids} for item in applications]
+
+@app.patch('/api/applications/{application_id}/check-in')
+def check_in(application_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter_by(id=application_id, student_id=user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy ca đã nhận')
+    now = datetime.utcnow()
+    if application.status != 'ACCEPTED' or application.checked_in_at:
+        raise HTTPException(409, 'Ca không thể check-in')
+    if not application.shift.start_time - timedelta(minutes=30) <= now <= application.shift.end_time:
+        raise HTTPException(409, 'Chỉ check-in từ 30 phút trước ca đến khi ca kết thúc')
+    application.checked_in_at = now
+    db.commit()
+    return {'id': str(application.id), 'checked_in_at': now.replace(tzinfo=timezone.utc)}
+
+@app.patch('/api/applications/{application_id}/check-out')
+def check_out(application_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter_by(id=application_id, student_id=user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy ca đã nhận')
+    now = datetime.utcnow()
+    if application.status != 'ACCEPTED' or not application.checked_in_at or application.checked_out_at:
+        raise HTTPException(409, 'Ca không thể check-out')
+    if now < application.shift.end_time:
+        raise HTTPException(409, 'Chỉ check-out sau khi ca kết thúc')
+    application.checked_out_at = now
+    db.add(models.Notification(user_id=application.shift.employer_id, shift_id=application.shift_id, title='Sinh viên đã check-out', body=f'{user.student_profile.full_name} đã hoàn thành ca {application.shift.title}; vui lòng xác nhận chấm công.', kind='ATTENDANCE'))
+    db.commit()
+    return {'id': str(application.id), 'checked_out_at': now.replace(tzinfo=timezone.utc)}
+
+@app.patch('/api/applications/{application_id}/complete')
+def complete_application(application_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).join(models.JobShift).filter(models.Application.id == application_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy ca đã nhận')
+    if application.status != 'ACCEPTED' or not application.checked_out_at or application.completed_at:
+        raise HTTPException(409, 'Ca chưa thể xác nhận hoàn thành')
+    application.completed_at = datetime.utcnow()
+    application.status = 'COMPLETED'
+    db.add(models.Notification(user_id=application.student_id, shift_id=application.shift_id, title='Ca làm đã hoàn thành', body=f'Chấm công ca {application.shift.title} đã được xác nhận. Bạn có thể đánh giá doanh nghiệp.', kind='ATTENDANCE'))
+    db.flush()
+    remaining = db.query(models.Application).filter(models.Application.shift_id == application.shift_id, models.Application.status == 'ACCEPTED').count()
+    if remaining == 0:
+        application.shift.status = 'DONE'
+    db.commit()
+    return {'id': str(application.id), 'status': application.status, 'completed_at': application.completed_at.replace(tzinfo=timezone.utc)}
+
+@app.post('/api/applications/{application_id}/reviews', status_code=201)
+def review_application(application_id: uuid.UUID, req: ReviewCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter(models.Application.id == application_id).first()
+    if not application or (user.id != application.student_id and user.id != application.shift.employer_id):
+        raise HTTPException(404, 'Không tìm thấy ca đã hoàn thành')
+    if application.status != 'COMPLETED':
+        raise HTTPException(409, 'Chỉ đánh giá sau khi ca được xác nhận hoàn thành')
+    role = 'STUDENT' if user.id == application.student_id else 'EMPLOYER'
+    if db.query(models.Review).filter_by(application_id=application.id, reviewer_role=role).first():
+        raise HTTPException(409, 'Bạn đã đánh giá ca này')
+    db.add(models.Review(application_id=application.id, reviewer_role=role, rating=req.rating, comment=req.comment.strip()))
+    db.flush()
+    if role == 'EMPLOYER':
+        ratings = [row.rating for row in db.query(models.Review).join(models.Application).filter(models.Application.student_id == application.student_id, models.Review.reviewer_role == 'EMPLOYER').all()]
+        application.student.average_rating = round(sum(ratings) / len(ratings), 2)
+    else:
+        ratings = [row.rating for row in db.query(models.Review).join(models.Application).join(models.JobShift).filter(models.JobShift.employer_id == application.shift.employer_id, models.Review.reviewer_role == 'STUDENT').all()]
+        application.shift.employer.average_rating = round(sum(ratings) / len(ratings), 2)
+    db.commit()
+    return {'application_id': str(application.id), 'reviewer_role': role, 'rating': req.rating}
 
 @app.patch('/api/applications/{application_id}/accept')
 def accept_application(application_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
