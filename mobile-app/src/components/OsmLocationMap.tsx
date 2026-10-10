@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { colors } from '../theme';
 
@@ -11,9 +11,9 @@ export function OsmLocationMap({ location, latitude, longitude }: Props) {
   const point = { latitude: latitude as number, longitude: longitude as number };
   async function openDirections() {
     const destination = `${point.latitude},${point.longitude}`;
-    const url = Platform.OS === 'ios' ? `http://maps.apple.com/?daddr=${destination}` : `geo:${destination}?q=${encodeURIComponent(location)}`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
     if (await Linking.canOpenURL(url)) await Linking.openURL(url);
-    else await Linking.openURL(`https://www.openstreetmap.org/directions?to=${destination}`);
+    else await Linking.openURL(url);
   }
   return <View style={styles.wrap}><MapView style={styles.map} initialRegion={{ ...point, latitudeDelta: 0.008, longitudeDelta: 0.008 }} onMapReady={() => setMapReady(true)}><UrlTile urlTemplate='https://tile.openstreetmap.org/{z}/{x}/{y}.png' maximumZ={19} flipY={false} /><Marker coordinate={point} title={location} /></MapView><View style={styles.footer}><Text style={styles.location} numberOfLines={2}>⌖ {location}</Text><Pressable accessibilityRole='button' onPress={() => { void openDirections(); }} style={styles.button}><Text style={styles.buttonText}>Chỉ đường</Text></Pressable></View><Text style={styles.attribution}>{mapReady ? '© OpenStreetMap contributors' : 'Đang tải bản đồ OpenStreetMap...'}</Text></View>;
 }
