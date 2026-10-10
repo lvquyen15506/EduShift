@@ -12,6 +12,7 @@ function allowed(path: string, role: Role) {
   if (path.startsWith('/admin')) return role === 'ADMIN';
   if (path.startsWith('/student')) return role === 'STUDENT';
   if (path.startsWith('/dashboard') || path.startsWith('/candidates') || path.startsWith('/shifts/new')) return role === 'EMPLOYER';
+  if (path.startsWith('/checkout')) return role === 'EMPLOYER';
   if (path.startsWith('/student/shifts')) return role === 'STUDENT';
   if (path.startsWith('/shifts')) return role === 'EMPLOYER';
   if (path.startsWith('/notifications')) return true;
