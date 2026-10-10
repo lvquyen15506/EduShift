@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
+import OsmStaticMap from './OsmStaticMap';
 type Props = { initialLocation?: string; initialLatitude?: number | null; initialLongitude?: number | null };
-type SearchResult = { display_name: string; lat: string; lon: string; countrycode?: string };
-type PhotonResult = { properties?: { name?: string; street?: string; city?: string; state?: string; country?: string }; geometry?: { coordinates?: [number, number] } };
+type SearchResult = { display_name: string; lat: string; lon: string; countrycode?: string; class?: string; type?: string };
+type PhotonResult = { properties?: { name?: string; street?: string; city?: string; state?: string; country?: string; osm_key?: string; osm_value?: string; type?: string }; geometry?: { coordinates?: [number, number] } };
 type GeoPoint = { latitude: number; longitude: number };
 const isVietnam = (latitude: number, longitude: number) => latitude >= 8 && latitude <= 24 && longitude >= 102 && longitude <= 110;
+const isPlace = (item: SearchResult) => !['highway', 'railway', 'boundary', 'place'].includes(item.class || '') && !['road', 'bridge', 'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'path', 'track'].includes(item.type || '');
 const distance = (item: SearchResult, point: GeoPoint) => Math.hypot(Number(item.lat) - point.latitude, Number(item.lon) - point.longitude);
 function nearest(items: SearchResult[], point: GeoPoint | null) { return point ? [...items].sort((a, b) => distance(a, point) - distance(b, point)) : items; }
 function unique(items: SearchResult[]) { const seen = new Set<string>(); return items.filter(item => { const key = Number(item.lat).toFixed(5) + ',' + Number(item.lon).toFixed(5); if (seen.has(key)) return false; seen.add(key); return true; }); }
@@ -13,9 +15,8 @@ async function photonSearch(value: string, signal: AbortSignal, point: GeoPoint 
   const response = await fetch('https://photon.komoot.io/api/?lang=default&limit=20' + nearby + '&q=' + encodeURIComponent(value), { signal });
   if (!response.ok) throw new Error('search failed');
   const data = await response.json() as { features?: PhotonResult[] };
-  return (data.features || []).flatMap(item => { const coordinates = item.geometry?.coordinates; if (!coordinates || !isVietnam(coordinates[1], coordinates[0])) return []; const p = item.properties || {}; const name = p.name || [p.street, p.city].filter(Boolean).join(', '); const display_name = [name, p.city, p.state, p.country].filter((part, index, all) => part && all.indexOf(part) === index).join(', '); return display_name ? [{ display_name, lat: String(coordinates[1]), lon: String(coordinates[0]) }] : []; });
+  return (data.features || []).flatMap(item => { const coordinates = item.geometry?.coordinates; if (!coordinates || !isVietnam(coordinates[1], coordinates[0])) return []; const p = item.properties || {}; if (p.osm_key === 'highway' || p.osm_key === 'railway' || ['street', 'road', 'house'].includes(p.type || '')) return []; const name = p.name || [p.street, p.city].filter(Boolean).join(', '); const display_name = [name, p.city, p.state, p.country].filter((part, index, all) => part && all.indexOf(part) === index).join(', '); return display_name ? [{ display_name, lat: String(coordinates[1]), lon: String(coordinates[0]) }] : []; });
 }
-function mapUrl(latitude: number, longitude: number) { const delta = 0.0035; return 'https://www.openstreetmap.org/export/embed.html?bbox=' + (longitude - delta) + ',' + (latitude - delta) + ',' + (longitude + delta) + ',' + (latitude + delta) + '&layer=mapnik&marker=' + latitude + ',' + longitude; }
 export default function LocationPicker({ initialLocation = '', initialLatitude = null, initialLongitude = null }: Props) {
   const [query, setQuery] = useState(initialLocation); const [results, setResults] = useState<SearchResult[]>([]); const [selected, setSelected] = useState({ location: initialLocation, latitude: initialLatitude, longitude: initialLongitude });
   const [searching, setSearching] = useState(false); const [searchError, setSearchError] = useState(false); const [searched, setSearched] = useState(false);
@@ -37,7 +38,7 @@ export default function LocationPicker({ initialLocation = '', initialLatitude =
         ]);
         const nominatimItems = nominatim.status === 'fulfilled' ? nominatim.value : [];
         const photonItems = photon.status === 'fulfilled' ? photon.value : [];
-        const localItems = unique([...nominatimItems, ...photonItems].filter(item => isVietnam(Number(item.lat), Number(item.lon))));
+        const localItems = unique([...nominatimItems, ...photonItems].filter(item => isVietnam(Number(item.lat), Number(item.lon)) && isPlace(item)));
         if (!localItems.length && nominatim.status === 'rejected' && photon.status === 'rejected') throw new Error('search failed');
         setResults(nearest(localItems, nearby).slice(0, 8)); setSearched(true);
       } catch (error) {
@@ -47,6 +48,5 @@ export default function LocationPicker({ initialLocation = '', initialLatitude =
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query, selected.location, nearby, areaHint]);
   function choose(item: SearchResult) { setQuery(item.display_name); setResults([]); setSelected({ location: item.display_name, latitude: Number(item.lat), longitude: Number(item.lon) }); }
-  const map = selected.latitude != null && selected.longitude != null ? mapUrl(selected.latitude, selected.longitude) : '';
-  return <div className='location-picker'><label>Tên quán / địa chỉ<input name='location' required value={query} onChange={event => { setQuery(event.target.value); setResults([]); setSearched(false); setSelected({ location: '', latitude: null, longitude: null }); }} placeholder='Ví dụ: bún ốc, Highlands Hồ Gươm...' autoComplete='off' /></label>{searching && <div className='location-status'>Đang tìm quán {areaHint ? 'gần ' + areaHint : 'gần bạn'}...</div>}{results.length > 0 && <div className='location-results' role='listbox' aria-label='Địa điểm gợi ý'>{results.map(item => <button type='button' key={item.lat + item.lon} onClick={() => choose(item)}>{item.display_name}</button>)}</div>}{!searching && searched && !searchError && results.length === 0 && <div className='location-status'>Chưa tìm thấy địa điểm. Hãy thêm quận, thành phố, ví dụ “bún ốc Cầu Giấy”.</div>}{searchError && <div className='location-status location-status-error'>Không thể tìm địa điểm lúc này. Kiểm tra mạng rồi thử lại.</div>}<input type='hidden' name='latitude' value={selected.latitude ?? ''} /><input type='hidden' name='longitude' value={selected.longitude ?? ''} /><p>Gõ tên quán hoặc địa chỉ, chọn một gợi ý OpenStreetMap để ghim bản đồ chính xác.</p>{map && <iframe title='Vị trí đã chọn' loading='lazy' src={map} />}</div>;
+  return <div className='location-picker'><label>Tên quán / địa chỉ<input name='location' required value={query} onChange={event => { setQuery(event.target.value); setResults([]); setSearched(false); setSelected({ location: '', latitude: null, longitude: null }); }} placeholder='Ví dụ: bún ốc, Highlands Hồ Gươm...' autoComplete='off' /></label>{searching && <div className='location-status'>Đang tìm quán {areaHint ? 'gần ' + areaHint : 'gần bạn'}...</div>}{results.length > 0 && <div className='location-results' role='listbox' aria-label='Địa điểm gợi ý'>{results.map(item => <button type='button' key={item.lat + item.lon} onClick={() => choose(item)}>{item.display_name}</button>)}</div>}{!searching && searched && !searchError && results.length === 0 && <div className='location-status'>Chưa tìm thấy địa điểm. Hãy thêm quận, thành phố, ví dụ “bún ốc Cầu Giấy”.</div>}{searchError && <div className='location-status location-status-error'>Không thể tìm địa điểm lúc này. Kiểm tra mạng rồi thử lại.</div>}<input type='hidden' name='latitude' value={selected.latitude ?? ''} /><input type='hidden' name='longitude' value={selected.longitude ?? ''} /><p>Gõ tên quán hoặc địa chỉ, chọn một gợi ý OpenStreetMap để ghim bản đồ chính xác.</p>{selected.latitude != null && selected.longitude != null && <OsmStaticMap latitude={selected.latitude} longitude={selected.longitude} />}</div>;
 }
