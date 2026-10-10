@@ -34,7 +34,7 @@ export default function Pricing() {
     {plans?.length === 0 && <Empty description="Chưa có gói đang bán" />}
     <div className="pricing-grid">{plans?.map(plan => <Card key={plan.id} className={'pricing-card ' + (plan.code === 'FREE' ? 'pricing-card-free' : 'pricing-card-featured')} title={<div className="pricing-card-title"><span>{plan.name}</span>{plan.code !== 'FREE' && <small>Đề xuất</small>}</div>}>
       <div className="pricing-price">{money(plan.price)}</div><p className="pricing-description">{plan.description}</p><div className="pricing-limit">{plan.post_limit} lượt đăng ca{plan.duration_days ? ` / ${plan.duration_days} ngày` : ' tổng cộng'}</div>
-      {plan.code === 'FREE' ? <Link className="pricing-button pricing-button-secondary" href="/register">Bắt đầu miễn phí <span>→</span></Link> : <Button className="pricing-button" type="primary" loading={buying === plan.id} disabled={Boolean(buying) || !paymentsReady} onClick={() => void buy(plan)}>{paymentsReady ? 'Mua gói ngay' : 'Thanh toán chưa mở'} <span>→</span></Button>}
+      {plan.code === 'FREE' ? <Link className="pricing-button pricing-button-secondary" href={shellRole === 'EMPLOYER' ? '/shifts/new' : '/register'}>{shellRole === 'EMPLOYER' ? 'Đăng ca mới' : 'Bắt đầu miễn phí'} <span>→</span></Link> : <Button className="pricing-button" type="primary" loading={buying === plan.id} disabled={Boolean(buying) || !paymentsReady} onClick={() => void buy(plan)}>{paymentsReady ? 'Mua gói ngay' : 'Thanh toán chưa mở'} <span>→</span></Button>}
     </Card>)}</div></div>;
   return shellRole ? <AppShell>{content}</AppShell> : <main className="pricing-public-shell">{content}</main>;
 }
