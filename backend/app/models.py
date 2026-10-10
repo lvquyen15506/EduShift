@@ -12,6 +12,8 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime, nullable=True)
     avatar_data = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     student_profile = relationship('Student', back_populates='user', uselist=False, cascade='all, delete-orphan')
@@ -43,6 +45,57 @@ class Employer(Base):
     average_rating = Column(Float, nullable=True)
     user = relationship('User', back_populates='employer_profile')
     shifts = relationship('JobShift', back_populates='employer', cascade='all, delete-orphan')
+
+
+
+class EmployerPlan(Base):
+    __tablename__ = 'employer_plans'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(40), unique=True, nullable=False)
+    name = Column(String(120), nullable=False)
+    post_limit = Column(Integer, nullable=True)
+    price = Column(Integer, nullable=False, default=0)
+    duration_days = Column(Integer, nullable=True)
+    description = Column(Text, nullable=False, default='')
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class EmployerSubscription(Base):
+    __tablename__ = 'employer_subscriptions'
+    employer_id = Column(UUID(as_uuid=True), ForeignKey('employers.user_id', ondelete='CASCADE'), primary_key=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('employer_plans.id'), nullable=False)
+    posts_used = Column(Integer, nullable=False, default=0)
+    free_posts_used = Column(Integer, nullable=False, default=0)
+    purchased_post_limit = Column(Integer, nullable=True)
+    purchased_name = Column(String(120), nullable=True)
+    purchased_price = Column(Integer, nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    plan = relationship('EmployerPlan')
+    employer = relationship('Employer')
+
+class EmployerPayment(Base):
+    __tablename__ = 'employer_payments'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employer_id = Column(UUID(as_uuid=True), ForeignKey('employers.user_id', ondelete='CASCADE'), nullable=False)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('employer_plans.id'), nullable=False)
+    amount = Column(Integer, nullable=False)
+    post_limit = Column(Integer, nullable=True)
+    duration_days = Column(Integer, nullable=False, default=30)
+    plan_name = Column(String(120), nullable=False, default='')
+    provider_event_id = Column(String(100), nullable=True, unique=True)
+    status = Column(String(20), nullable=False, default='PENDING')
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    confirmed_at = Column(DateTime, nullable=True)
+
+class AdminAudit(Base):
+    __tablename__ = 'admin_audit'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    action = Column(String(100), nullable=False)
+    target_id = Column(String(100), nullable=False)
+    detail = Column(Text, nullable=False, default='')
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 class Schedule(Base):
     __tablename__ = 'schedules'
@@ -110,12 +163,30 @@ class Notification(Base):
     title = Column(String(220), nullable=False)
     body = Column(Text, nullable=False)
     kind = Column(String(30), default='INFO')
+    template_version = Column(Integer, nullable=False, default=1)
+    in_app_enabled = Column(Boolean, nullable=False, default=True)
+    email_enabled = Column(Boolean, nullable=False, default=False)
+    push_enabled = Column(Boolean, nullable=False, default=True)
+    email_attempts = Column(Integer, nullable=False, default=0)
+    email_next_attempt_at = Column(DateTime, nullable=True)
+    email_sent_at = Column(DateTime, nullable=True)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     push_attempts = Column(Integer, default=0, nullable=False)
     push_next_attempt_at = Column(DateTime, nullable=True)
     push_sent_at = Column(DateTime, nullable=True)
     user = relationship('User', back_populates='notifications')
+
+class NotificationPolicy(Base):
+    __tablename__ = 'notification_policies'
+    kind = Column(String(30), primary_key=True)
+    title_template = Column(String(220), nullable=False, default='{title}')
+    body_template = Column(Text, nullable=False, default='{body}')
+    in_app_enabled = Column(Boolean, nullable=False, default=True)
+    email_enabled = Column(Boolean, nullable=False, default=False)
+    push_enabled = Column(Boolean, nullable=False, default=True)
+    version = Column(Integer, nullable=False, default=1)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 class PushToken(Base):
     __tablename__ = 'push_tokens'

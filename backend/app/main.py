@@ -11,7 +11,7 @@ import secrets
 import uuid
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status, Header
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -41,6 +41,8 @@ def migrate_schema():
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS longitude FLOAT",
         "ALTER TABLE employers ADD COLUMN IF NOT EXISTS average_rating FLOAT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS location VARCHAR(300)",
         "ALTER TABLE shifts ADD COLUMN IF NOT EXISTS hourly_rate FLOAT",
@@ -57,6 +59,13 @@ def migrate_schema():
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMP",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind VARCHAR(30) DEFAULT 'INFO'",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS template_version INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS email_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS email_attempts INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS email_next_attempt_at TIMESTAMP",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS shift_id UUID",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS push_attempts INTEGER DEFAULT 0",
@@ -67,6 +76,27 @@ def migrate_schema():
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'MANUAL'",
         "ALTER TABLE schedules ADD COLUMN IF NOT EXISTS application_id UUID REFERENCES applications(id) ON DELETE CASCADE",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_schedules_application_id ON schedules(application_id)",
+        "CREATE TABLE IF NOT EXISTS employer_plans (id UUID PRIMARY KEY, code VARCHAR(40) UNIQUE NOT NULL, name VARCHAR(120) NOT NULL, post_limit INTEGER, price INTEGER NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS employer_subscriptions (employer_id UUID PRIMARY KEY REFERENCES employers(user_id) ON DELETE CASCADE, plan_id UUID NOT NULL REFERENCES employer_plans(id), posts_used INTEGER NOT NULL DEFAULT 0, started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "ALTER TABLE employer_subscriptions ADD COLUMN IF NOT EXISTS free_posts_used INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE employer_subscriptions ADD COLUMN IF NOT EXISTS purchased_post_limit INTEGER",
+        "ALTER TABLE employer_subscriptions ADD COLUMN IF NOT EXISTS purchased_name VARCHAR(120)",
+        "ALTER TABLE employer_subscriptions ADD COLUMN IF NOT EXISTS purchased_price INTEGER",
+        "ALTER TABLE employer_subscriptions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP",
+        "CREATE TABLE IF NOT EXISTS employer_payments (id UUID PRIMARY KEY, employer_id UUID NOT NULL REFERENCES employers(user_id) ON DELETE CASCADE, plan_id UUID NOT NULL REFERENCES employer_plans(id), amount INTEGER NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'PENDING', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, confirmed_at TIMESTAMP)",
+        "ALTER TABLE employer_plans ADD COLUMN IF NOT EXISTS duration_days INTEGER",
+        "ALTER TABLE employer_plans ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS post_limit INTEGER",
+        "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 30",
+        "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS plan_name VARCHAR(120) NOT NULL DEFAULT ''",
+        "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS provider_event_id VARCHAR(100) UNIQUE",
+        "CREATE TABLE IF NOT EXISTS admin_audit (id UUID PRIMARY KEY, actor_id UUID NOT NULL REFERENCES users(id), action VARCHAR(100) NOT NULL, target_id VARCHAR(100) NOT NULL, detail TEXT NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS notification_policies (kind VARCHAR(30) PRIMARY KEY, title_template VARCHAR(220) NOT NULL DEFAULT '{title}', body_template TEXT NOT NULL DEFAULT '{body}', in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE, email_enabled BOOLEAN NOT NULL DEFAULT FALSE, push_enabled BOOLEAN NOT NULL DEFAULT TRUE, version INTEGER NOT NULL DEFAULT 1, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "INSERT INTO notification_policies (kind, title_template, body_template, in_app_enabled, email_enabled, push_enabled, version, updated_at) VALUES ('INFO', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('MATCH', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('APPLICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('INVITATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('ATTENDANCE', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('VERIFICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP) ON CONFLICT (kind) DO NOTHING",
+        "INSERT INTO employer_plans (id, code, name, post_limit, price, description, is_active, created_at) SELECT '00000000-0000-0000-0000-000000000001', 'FREE', 'Miễn phí', 5, 0, '5 lượt đăng ca miễn phí tổng cộng', TRUE, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM employer_plans WHERE code = 'FREE')",
+        "UPDATE employer_plans SET description = '5 lượt đăng ca miễn phí tổng cộng' WHERE code = 'FREE' AND description = ''",
+        "INSERT INTO employer_subscriptions (employer_id, plan_id, posts_used, free_posts_used, started_at) SELECT e.user_id, p.id, COUNT(s.id), COUNT(s.id), CURRENT_TIMESTAMP FROM employers e CROSS JOIN employer_plans p LEFT JOIN shifts s ON s.employer_id = e.user_id WHERE p.code = 'FREE' AND NOT EXISTS (SELECT 1 FROM employer_subscriptions q WHERE q.employer_id = e.user_id) GROUP BY e.user_id, p.id",
+        "UPDATE employer_subscriptions q SET free_posts_used = GREATEST(q.free_posts_used, COALESCE((SELECT COUNT(*) FROM shifts s WHERE s.employer_id = q.employer_id), 0)) WHERE q.plan_id = (SELECT id FROM employer_plans WHERE code = 'FREE')",
         "UPDATE students SET average_rating = NULL WHERE average_rating = 5 AND NOT EXISTS (SELECT 1 FROM reviews r JOIN applications a ON a.id = r.application_id WHERE a.student_id = students.user_id AND r.reviewer_role = 'EMPLOYER')",
     ]
     with engine.begin() as connection:
@@ -170,6 +200,63 @@ class InvitationResponse(BaseModel):
 class ShiftStatusUpdate(BaseModel):
     status: str
 
+class EmployerPlanOut(BaseModel):
+    code: str
+    name: str
+    post_limit: Optional[int]
+    price: int
+    is_active: bool
+
+class PlanInput(BaseModel):
+    code: str = Field(min_length=2, max_length=40, pattern=r'^[A-Z0-9_]+$')
+    name: str = Field(min_length=2, max_length=120)
+    post_limit: int = Field(ge=1, le=100000)
+    price: int = Field(ge=1000, le=1000000000)
+    duration_days: int = Field(ge=1, le=3650)
+    description: str = Field(default='', max_length=2000)
+    is_active: bool = True
+
+class PlanUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    post_limit: Optional[int] = Field(default=None, ge=1, le=100000)
+    price: Optional[int] = Field(default=None, ge=1000, le=1000000000)
+    duration_days: Optional[int] = Field(default=None, ge=1, le=3650)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    is_active: Optional[bool] = None
+
+class CheckoutInput(BaseModel):
+    plan_id: uuid.UUID
+
+class SandboxPaymentInput(BaseModel):
+    outcome: str = Field(pattern=r'^(SUCCESS|FAILED|CANCELLED)$')
+
+class PaymentWebhookInput(BaseModel):
+    payment_id: uuid.UUID
+    outcome: str = Field(pattern=r'^(SUCCESS|FAILED|CANCELLED)$')
+    event_id: str = Field(min_length=1, max_length=100)
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    email: EmailStr
+    password: str = Field(min_length=8)
+    role: str = Field(pattern=r'^(STUDENT|EMPLOYER|ADMIN)$')
+    name: str = Field(min_length=2, max_length=200)
+
+class AdminUserUpdate(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=3, max_length=80)
+    email: Optional[EmailStr] = None
+    name: Optional[str] = Field(default=None, min_length=2, max_length=200)
+    role: Optional[str] = Field(default=None, pattern=r'^(STUDENT|EMPLOYER|ADMIN)$')
+    is_active: Optional[bool] = None
+
+class NotificationPolicyUpdate(BaseModel):
+    title_template: Optional[str] = Field(default=None, min_length=1, max_length=220)
+    body_template: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    in_app_enabled: Optional[bool] = None
+    email_enabled: Optional[bool] = None
+    push_enabled: Optional[bool] = None
+
+
 class VerificationUpdate(BaseModel):
     is_verified: bool
 
@@ -229,7 +316,7 @@ def current_user(authorization: Optional[str], db: Session) -> Optional[models.U
             return None
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user = db.query(models.User).filter(models.User.id == payload.get('sub')).first()
-        return user
+        return user if user and user.is_active and user.deleted_at is None else None
     except (ValueError, JWTError):
         return None
 
@@ -256,6 +343,30 @@ def shift_dict(shift: models.JobShift):
 
 def schedule_dict(item: models.Schedule):
     return {'id': item.id, 'title': item.title, 'type': item.type, 'source': item.source, 'application_id': item.application_id, 'shift_id': item.application.shift_id if item.application else None, 'start_time': item.start_time.replace(tzinfo=timezone.utc), 'end_time': item.end_time.replace(tzinfo=timezone.utc)}
+
+def notification_policy_dict(policy: models.NotificationPolicy):
+    return {'kind': policy.kind, 'title_template': policy.title_template,
+        'body_template': policy.body_template, 'in_app_enabled': policy.in_app_enabled,
+        'email_enabled': policy.email_enabled, 'push_enabled': policy.push_enabled,
+        'version': policy.version, 'updated_at': policy.updated_at}
+
+def validate_notification_template(value: str):
+    if any(field not in {'{title}', '{body}'} for field in re.findall(r'\{[^{}]*\}', value)):
+        raise HTTPException(422, 'Mẫu chỉ được dùng {title} và {body}')
+    residue = value.replace('{title}', '').replace('{body}', '')
+    if '{' in residue or '}' in residue:
+        raise HTTPException(422, 'Dấu ngoặc trong mẫu không hợp lệ')
+
+def build_notification(db: Session, **kwargs):
+    kind = kwargs.get('kind') or 'INFO'
+    policy = db.query(models.NotificationPolicy).filter_by(kind=kind).first()
+    if not policy: return models.Notification(**kwargs)
+    title, body = kwargs['title'], kwargs['body']
+    kwargs['title'] = policy.title_template.replace('{title}', title).replace('{body}', body)
+    kwargs['body'] = policy.body_template.replace('{title}', title).replace('{body}', body)
+    kwargs.update(template_version=policy.version, in_app_enabled=policy.in_app_enabled,
+                  email_enabled=policy.email_enabled, push_enabled=policy.push_enabled)
+    return models.Notification(**kwargs)
 
 def schedule_model(item: ScheduleInput, student_id: uuid.UUID):
     start, end = utc_naive(item.start_time), utc_naive(item.end_time)
@@ -394,7 +505,7 @@ def confirm_password_reset(req: PasswordResetConfirm, db: Session = Depends(get_
 @app.post('/api/auth/login')
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(or_(models.User.email == req.identifier, models.User.username == req.identifier)).first()
-    if not user or not pwd_context.verify(req.password, user.password_hash):
+    if not user or not user.is_active or user.deleted_at is not None or not pwd_context.verify(req.password, user.password_hash):
         raise HTTPException(401, 'Sai thông tin đăng nhập hoặc mật khẩu')
     return {'message': 'Đăng nhập thành công', 'user_id': str(user.id), 'role': user.role, 'username': user.username, 'email': user.email, 'access_token': create_token(user), 'token_type': 'bearer'}
 
@@ -567,9 +678,123 @@ def admin_dashboard(user: models.User = Depends(require_role('ADMIN')), db: Sess
     return {'stats': {'users': db.query(models.User).count(), 'students': db.query(models.Student).count(), 'employers': db.query(models.Employer).count(), 'shifts': db.query(models.JobShift).count(), 'applications': db.query(models.Application).count(), 'unverified_employers': db.query(models.Employer).filter(models.Employer.is_verified == False).count()}, 'recent_users': [{'id': str(u.id), 'name': u.student_profile.full_name if u.student_profile else u.employer_profile.company_name if u.employer_profile else u.username or u.email, 'email': u.email, 'role': u.role, 'created_at': u.created_at.isoformat()} for u in users]}
 
 @app.get('/api/admin/users')
-def admin_users(user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
-    users = db.query(models.User).order_by(models.User.created_at.desc()).all()
-    return [{'id': str(u.id), 'name': u.student_profile.full_name if u.student_profile else u.employer_profile.company_name if u.employer_profile else u.username or u.email, 'username': u.username, 'email': u.email, 'role': u.role, 'created_at': u.created_at.isoformat(), 'is_verified': u.employer_profile.is_verified if u.employer_profile else None} for u in users]
+def admin_users(q: Optional[str] = None, role: Optional[str] = None, user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    query = db.query(models.User)
+    if q:
+        term = '%' + q.strip()[:100] + '%'
+        query = query.filter(or_(models.User.username.ilike(term), models.User.email.ilike(term)))
+    if role:
+        if role not in {'ADMIN', 'STUDENT', 'EMPLOYER'}: raise HTTPException(422, 'Vai trò không hợp lệ')
+        query = query.filter(models.User.role == role)
+    return [admin_user_dict(u) for u in query.order_by(models.User.created_at.desc()).limit(500).all()]
+
+def admin_user_dict(u: models.User):
+    return {'id': str(u.id), 'name': u.student_profile.full_name if u.student_profile else u.employer_profile.company_name if u.employer_profile else u.username or u.email,
+        'username': u.username, 'email': u.email, 'role': u.role, 'created_at': u.created_at.isoformat(),
+        'is_verified': u.employer_profile.is_verified if u.employer_profile else None,
+        'is_active': u.is_active, 'deleted_at': u.deleted_at}
+
+def audit_admin(db: Session, actor_id: uuid.UUID, action: str, target_id: uuid.UUID, detail: dict):
+    db.add(models.AdminAudit(actor_id=actor_id, action=action, target_id=str(target_id), detail=json.dumps(detail, ensure_ascii=False, default=str)))
+
+def ensure_admin_remains(db: Session, target: models.User):
+    if target.role == 'ADMIN' and target.is_active and target.deleted_at is None:
+        db.execute(text('SELECT pg_advisory_xact_lock(8829101)'))
+        active_count = db.query(models.User).filter_by(role='ADMIN', is_active=True, deleted_at=None).count()
+        if active_count <= 1: raise HTTPException(409, 'Không thể vô hiệu hóa admin cuối cùng')
+
+@app.post('/api/admin/users', status_code=201)
+def admin_create_user(req: AdminUserCreate, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    u = models.User(username=req.username, email=str(req.email).lower(), password_hash=pwd_context.hash(req.password), role=req.role)
+    try:
+        db.add(u); db.flush()
+        if req.role == 'STUDENT': db.add(models.Student(user_id=u.id, full_name=req.name))
+        elif req.role == 'EMPLOYER': db.add(models.Employer(user_id=u.id, company_name=req.name, is_verified=False))
+        audit_admin(db, actor.id, 'USER_CREATE', u.id, {'role': req.role})
+        db.commit(); db.refresh(u)
+    except IntegrityError:
+        db.rollback(); raise HTTPException(409, 'Username hoặc email đã tồn tại')
+    return admin_user_dict(u)
+
+@app.get('/api/admin/users/{target_id}')
+def admin_get_user(target_id: uuid.UUID, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    u = db.query(models.User).filter_by(id=target_id).first()
+    if not u: raise HTTPException(404, 'Không tìm thấy tài khoản')
+    return admin_user_dict(u)
+
+@app.patch('/api/admin/users/{target_id}')
+def admin_update_user(target_id: uuid.UUID, req: AdminUserUpdate, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    u = db.query(models.User).filter_by(id=target_id).with_for_update().first()
+    if not u: raise HTTPException(404, 'Không tìm thấy tài khoản')
+    if u.deleted_at is not None: raise HTTPException(409, 'Tài khoản đã xóa mềm')
+    changes = req.model_dump(exclude_unset=True)
+    role_changed = 'role' in changes and changes['role'] != u.role
+    if role_changed:
+        if u.role == 'ADMIN': ensure_admin_remains(db, u)
+        if u.student_profile and (u.student_profile.applications or u.student_profile.schedules):
+            raise HTTPException(409, 'Tài khoản có lịch sử, không thể đổi vai trò')
+        if u.employer_profile and (u.employer_profile.shifts or db.query(models.EmployerPayment).filter_by(employer_id=u.id).first()):
+            raise HTTPException(409, 'Tài khoản có lịch sử, không thể đổi vai trò')
+        if u.student_profile: db.delete(u.student_profile)
+        if u.employer_profile: db.delete(u.employer_profile)
+        db.flush()
+        u.role = changes['role']
+        if u.role == 'STUDENT': db.add(models.Student(user_id=u.id, full_name=changes.get('name') or u.username))
+        elif u.role == 'EMPLOYER': db.add(models.Employer(user_id=u.id, company_name=changes.get('name') or u.username))
+    if changes.get('is_active') is False and u.is_active:
+        if u.id == actor.id: raise HTTPException(409, 'Không thể tự vô hiệu hóa tài khoản')
+        if u.role == 'ADMIN': ensure_admin_remains(db, u)
+    for field in ('username', 'email', 'is_active'):
+        if field in changes:
+            if changes[field] is None: raise HTTPException(422, 'Không thể đặt giá trị rỗng')
+            setattr(u, field, str(changes[field]).lower() if field == 'email' else changes[field])
+    if changes.get('name') and not role_changed:
+        if u.student_profile: u.student_profile.full_name = changes['name']
+        elif u.employer_profile: u.employer_profile.company_name = changes['name']
+    audit_admin(db, actor.id, 'USER_UPDATE', u.id, {k: v for k, v in changes.items() if k != 'password'})
+    try: db.commit(); db.refresh(u)
+    except IntegrityError: db.rollback(); raise HTTPException(409, 'Username hoặc email đã tồn tại')
+    return admin_user_dict(u)
+
+@app.delete('/api/admin/users/{target_id}')
+def admin_delete_user(target_id: uuid.UUID, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    u = db.query(models.User).filter_by(id=target_id).with_for_update().first()
+    if not u: raise HTTPException(404, 'Không tìm thấy tài khoản')
+    if u.id == actor.id: raise HTTPException(409, 'Không thể tự xóa tài khoản')
+    if u.role == 'ADMIN' and u.is_active and u.deleted_at is None: ensure_admin_remains(db, u)
+    u.deleted_at = datetime.utcnow(); u.is_active = False
+    audit_admin(db, actor.id, 'USER_SOFT_DELETE', u.id, {})
+    db.commit()
+    return {'id': str(u.id), 'deleted_at': u.deleted_at}
+
+@app.get('/api/admin/notification-policies')
+def admin_notification_policies(actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    return [notification_policy_dict(p) for p in db.query(models.NotificationPolicy).order_by(models.NotificationPolicy.kind).all()]
+
+@app.patch('/api/admin/notification-policies/{kind}')
+def update_notification_policy(kind: str, req: NotificationPolicyUpdate,
+        actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    policy = db.query(models.NotificationPolicy).filter_by(kind=kind).with_for_update().first()
+    if not policy: raise HTTPException(404, 'Không tìm thấy loại thông báo')
+    changes = req.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        if value is None: raise HTTPException(422, 'Giá trị rỗng không hợp lệ')
+        if key.endswith('_template'): validate_notification_template(value)
+        setattr(policy, key, value)
+    policy.version += 1
+    policy.updated_at = datetime.utcnow()
+    audit_admin(db, actor.id, 'NOTIFICATION_POLICY_UPDATE', actor.id,
+                {'kind': kind, 'version': policy.version, 'changes': changes})
+    db.commit(); db.refresh(policy)
+    return notification_policy_dict(policy)
+
+@app.get('/api/admin/notification-policies/{kind}/preview')
+def preview_notification_policy(kind: str, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    policy = db.query(models.NotificationPolicy).filter_by(kind=kind).first()
+    if not policy: raise HTTPException(404, 'Không tìm thấy loại thông báo')
+    title, body = 'EduShift có cập nhật', 'Mở ứng dụng để xem thông báo.'
+    return {'title': policy.title_template.replace('{title}', title).replace('{body}', body),
+            'body': policy.body_template.replace('{title}', title).replace('{body}', body)}
 
 @app.get('/api/admin/shifts')
 def admin_shifts(user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
@@ -582,7 +807,7 @@ def verify_employer(employer_id: uuid.UUID, req: VerificationUpdate, user: model
     if not employer:
         raise HTTPException(404, 'Không tìm thấy doanh nghiệp')
     employer.is_verified = req.is_verified
-    db.add(models.Notification(user_id=employer_id, title='Trạng thái xác minh doanh nghiệp', body='Doanh nghiệp đã được xác minh.' if req.is_verified else 'Trạng thái xác minh doanh nghiệp đã bị thu hồi.', kind='VERIFICATION'))
+    db.add(build_notification(db, user_id=employer_id, title='Trạng thái xác minh doanh nghiệp', body='Doanh nghiệp đã được xác minh.' if req.is_verified else 'Trạng thái xác minh doanh nghiệp đã bị thu hồi.', kind='VERIFICATION'))
     db.commit()
     return {'id': str(employer_id), 'is_verified': employer.is_verified}
 
@@ -597,6 +822,152 @@ def update_student_location(req: LocationUpdate, user: models.User = Depends(req
     user.student_profile.longitude = req.longitude
     db.commit()
     return {'latitude': req.latitude, 'longitude': req.longitude}
+
+@app.get('/api/employer/plan')
+def employer_plan(user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    subscription = db.query(models.EmployerSubscription).filter(models.EmployerSubscription.employer_id == user.id).first()
+    if not subscription:
+        free_plan = db.query(models.EmployerPlan).filter(models.EmployerPlan.code == 'FREE').first()
+        if not free_plan:
+            raise HTTPException(503, 'Chưa cấu hình gói đăng ca')
+        subscription = models.EmployerSubscription(employer_id=user.id, plan_id=free_plan.id, posts_used=0, free_posts_used=0)
+        db.add(subscription); db.commit(); db.refresh(subscription)
+    plan = db.query(models.EmployerPlan).filter(models.EmployerPlan.id == subscription.plan_id).first()
+    expired = subscription.expires_at is not None and subscription.expires_at <= datetime.utcnow()
+    if expired:
+        plan = db.query(models.EmployerPlan).filter_by(code='FREE').one()
+    used = subscription.free_posts_used if expired else subscription.posts_used
+    limit = subscription.purchased_post_limit if plan.code != 'FREE' else plan.post_limit
+    remaining = None if limit is None else max(limit - used, 0)
+    return {'plan': {'code': plan.code, 'name': subscription.purchased_name if plan.code != 'FREE' and subscription.purchased_name else plan.name, 'post_limit': limit, 'price': subscription.purchased_price if plan.code != 'FREE' and subscription.purchased_price is not None else plan.price, 'is_active': plan.is_active}, 'posts_used': used, 'posts_remaining': remaining, 'free_posts_used': subscription.free_posts_used, 'expires_at': None if expired else subscription.expires_at}
+
+def plan_dict(plan: models.EmployerPlan):
+    return {'id': str(plan.id), 'code': plan.code, 'name': plan.name,
+            'post_limit': plan.post_limit, 'price': plan.price,
+            'duration_days': plan.duration_days, 'description': plan.description,
+            'is_active': plan.is_active}
+
+@app.get('/api/plans')
+def public_plans(db: Session = Depends(get_db)):
+    return [plan_dict(p) for p in db.query(models.EmployerPlan).filter_by(is_active=True).order_by(models.EmployerPlan.price).all()]
+
+@app.get('/api/payments/config')
+def payment_config():
+    return {'available': os.getenv('PAYMENTS_MODE', 'disabled') == 'sandbox', 'mode': os.getenv('PAYMENTS_MODE', 'disabled')}
+
+@app.get('/api/admin/plans')
+def admin_plans(user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    return [plan_dict(p) for p in db.query(models.EmployerPlan).order_by(models.EmployerPlan.price).all()]
+
+@app.post('/api/admin/plans', status_code=201)
+def create_plan(req: PlanInput, user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    if req.code == 'FREE':
+        raise HTTPException(409, 'Không thể thay đổi gói Free cố định')
+    plan = models.EmployerPlan(**req.model_dump())
+    try:
+        db.add(plan); db.flush()
+        db.add(models.AdminAudit(actor_id=user.id, action='PLAN_CREATE', target_id=str(plan.id), detail=json.dumps(req.model_dump(), ensure_ascii=False)))
+        db.commit(); db.refresh(plan)
+    except IntegrityError:
+        db.rollback(); raise HTTPException(409, 'Mã gói đã tồn tại')
+    return plan_dict(plan)
+
+@app.patch('/api/admin/plans/{plan_id}')
+def update_plan(plan_id: uuid.UUID, req: PlanUpdate, user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    plan = db.query(models.EmployerPlan).filter_by(id=plan_id).with_for_update().first()
+    if not plan: raise HTTPException(404, 'Không tìm thấy gói')
+    if plan.code == 'FREE': raise HTTPException(409, 'Không thể sửa gói Free cố định')
+    changes = req.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        if value is None: raise HTTPException(422, 'Không thể đặt giá trị rỗng')
+        setattr(plan, key, value)
+    db.add(models.AdminAudit(actor_id=user.id, action='PLAN_UPDATE', target_id=str(plan.id), detail=json.dumps(changes, ensure_ascii=False)))
+    db.commit(); db.refresh(plan)
+    return plan_dict(plan)
+
+@app.post('/api/employer/checkout', status_code=201)
+def create_checkout(req: CheckoutInput, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    if os.getenv('PAYMENTS_MODE', 'disabled') != 'sandbox':
+        raise HTTPException(503, 'Thanh toán chưa được cấu hình')
+    plan = db.query(models.EmployerPlan).filter_by(id=req.plan_id, is_active=True).first()
+    if not plan or plan.code == 'FREE' or not plan.duration_days:
+        raise HTTPException(404, 'Gói không còn được bán')
+    db.query(models.Employer).filter_by(user_id=user.id).with_for_update().one()
+    subscription = db.query(models.EmployerSubscription).filter_by(employer_id=user.id).first()
+    if not subscription:
+        free_plan = db.query(models.EmployerPlan).filter_by(code='FREE').one()
+        used = db.query(func.count(models.JobShift.id)).filter_by(employer_id=user.id).scalar() or 0
+        db.add(models.EmployerSubscription(employer_id=user.id, plan_id=free_plan.id,
+            posts_used=used, free_posts_used=used))
+    payment = models.EmployerPayment(employer_id=user.id, plan_id=plan.id,
+        amount=plan.price, post_limit=plan.post_limit, duration_days=plan.duration_days,
+        plan_name=plan.name, status='PENDING')
+    db.add(payment); db.commit(); db.refresh(payment)
+    return {'id': str(payment.id), 'amount': payment.amount, 'status': payment.status,
+            'checkout_url': '/checkout/' + str(payment.id)}
+
+def settle_payment(db: Session, payment_id: uuid.UUID, outcome: str, event_id: str):
+    payment = db.query(models.EmployerPayment).filter_by(id=payment_id).with_for_update().first()
+    if not payment: raise HTTPException(404, 'Không tìm thấy giao dịch')
+    if payment.status != 'PENDING':
+        return {'id': str(payment.id), 'status': payment.status}
+    if outcome == 'SUCCESS':
+        subscription = db.query(models.EmployerSubscription).filter_by(employer_id=payment.employer_id).with_for_update().first()
+        if not subscription: raise HTTPException(409, 'Không tìm thấy thuê bao doanh nghiệp')
+        renewing = (subscription.plan_id == payment.plan_id and subscription.expires_at is not None
+                    and subscription.expires_at > datetime.utcnow())
+        subscription.plan_id = payment.plan_id
+        if renewing:
+            subscription.purchased_post_limit = (subscription.purchased_post_limit or 0) + (payment.post_limit or 0)
+        else:
+            subscription.posts_used = 0
+            subscription.purchased_post_limit = payment.post_limit
+        subscription.purchased_name = payment.plan_name
+        subscription.purchased_price = payment.amount
+        if not renewing:
+            subscription.started_at = datetime.utcnow()
+        subscription.expires_at = (subscription.expires_at if renewing else subscription.started_at) + timedelta(days=payment.duration_days)
+    payment.status = outcome
+    payment.provider_event_id = event_id
+    payment.confirmed_at = datetime.utcnow()
+    db.commit()
+    return {'id': str(payment.id), 'status': payment.status}
+
+@app.post('/api/payments/sandbox/{payment_id}')
+def sandbox_payment(payment_id: uuid.UUID, req: SandboxPaymentInput,
+                    user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    if os.getenv('PAYMENTS_MODE', 'disabled') != 'sandbox': raise HTTPException(404, 'Sandbox không bật')
+    payment = db.query(models.EmployerPayment).filter_by(id=payment_id, employer_id=user.id).first()
+    if not payment: raise HTTPException(404, 'Không tìm thấy giao dịch')
+    return settle_payment(db, payment_id, req.outcome, 'sandbox:' + str(payment_id))
+
+@app.post('/api/payments/webhook')
+async def payment_webhook(req: Request, db: Session = Depends(get_db)):
+    secret = os.getenv('PAYMENT_WEBHOOK_SECRET', '')
+    if os.getenv('PAYMENTS_MODE', 'disabled') != 'sandbox' or not secret:
+        raise HTTPException(503, 'Webhook chưa được cấu hình')
+    body = await req.body()
+    supplied = req.headers.get('x-edushift-signature', '')
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(supplied, expected):
+        raise HTTPException(401, 'Chữ ký không hợp lệ')
+    event = PaymentWebhookInput.model_validate_json(body)
+    return settle_payment(db, event.payment_id, event.outcome, event.event_id)
+
+@app.get('/api/employer/payments')
+def employer_payments(user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    rows = db.query(models.EmployerPayment).filter_by(employer_id=user.id).order_by(models.EmployerPayment.created_at.desc()).all()
+    return [{'id': str(p.id), 'plan_name': p.plan_name, 'amount': p.amount,
+             'post_limit': p.post_limit, 'duration_days': p.duration_days,
+             'status': p.status, 'created_at': p.created_at} for p in rows]
+
+@app.get('/api/employer/payments/{payment_id}')
+def employer_payment(payment_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    p = db.query(models.EmployerPayment).filter_by(id=payment_id, employer_id=user.id).first()
+    if not p: raise HTTPException(404, 'Không tìm thấy giao dịch')
+    return {'id': str(p.id), 'plan_name': p.plan_name, 'amount': p.amount,
+            'post_limit': p.post_limit, 'duration_days': p.duration_days,
+            'status': p.status, 'created_at': p.created_at}
 
 @app.get('/api/shifts')
 def list_shifts(status_filter: Optional[str] = Query(default=None, alias='status'), user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
@@ -649,17 +1020,46 @@ def public_shifts(
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
     if user.role != 'EMPLOYER' or not user.employer_profile: raise HTTPException(403, 'Chỉ doanh nghiệp mới được tạo ca')
     if not user.employer_profile.is_verified: raise HTTPException(403, 'Doanh nghiệp cần được xác minh trước khi đăng ca')
+    # Lock the employer even when its subscription row does not exist yet.
+    db.query(models.Employer).filter(models.Employer.user_id == user.id).with_for_update().one()
+    subscription = db.query(models.EmployerSubscription).filter(models.EmployerSubscription.employer_id == user.id).with_for_update().first()
+    if not subscription:
+        free_plan = db.query(models.EmployerPlan).filter(models.EmployerPlan.code == 'FREE', models.EmployerPlan.is_active.is_(True)).first()
+        if not free_plan:
+            raise HTTPException(503, 'Chưa cấu hình gói đăng ca miễn phí')
+        existing = db.query(func.count(models.JobShift.id)).filter(models.JobShift.employer_id == user.id).scalar() or 0
+        subscription = models.EmployerSubscription(employer_id=user.id, plan_id=free_plan.id, posts_used=existing, free_posts_used=existing)
+        db.add(subscription)
+        db.flush()
+    plan = db.query(models.EmployerPlan).filter(models.EmployerPlan.id == subscription.plan_id).first()
+    if not plan:
+        raise HTTPException(403, 'Gói đăng ca hiện không khả dụng')
+    if subscription.expires_at is not None and subscription.expires_at <= datetime.utcnow():
+        free_plan = db.query(models.EmployerPlan).filter_by(code='FREE').one()
+        subscription.plan_id = free_plan.id
+        subscription.posts_used = subscription.free_posts_used
+        subscription.purchased_post_limit = None
+        subscription.purchased_name = None
+        subscription.purchased_price = None
+        subscription.expires_at = None
+        plan = free_plan
+    limit = subscription.purchased_post_limit if plan.code != 'FREE' else plan.post_limit
+    if limit is not None and subscription.posts_used >= limit:
+        raise HTTPException(402, 'Bạn đã dùng hết lượt đăng ca của gói hiện tại. Vui lòng mua gói mới.')
     start, end = utc_naive(req.start_time), utc_naive(req.end_time)
     if end <= start: raise HTTPException(422, 'Giờ kết thúc phải sau giờ bắt đầu')
     shift = models.JobShift(employer_id=user.id, title=req.title, description=req.description, location=req.location, start_time=start, end_time=end, hourly_rate=req.hourly_rate, required_workers=req.required_workers, required_skills=','.join(req.required_skills), latitude=req.latitude, longitude=req.longitude)
     db.add(shift); db.flush()
+    subscription.posts_used += 1
+    if plan.code == 'FREE':
+        subscription.free_posts_used += 1
     students = db.query(models.Student).options(selectinload(models.Student.schedules)).all()
     matched = 0
     for student in students:
         result = match_student_shift(student, shift)
         if result['score'] >= 80:
             matched += 1
-            db.add(models.Notification(user_id=student.user_id, shift_id=shift.id, title='Có ca làm phù hợp', body=f'{shift.title} phù hợp {result["score"]}% với hồ sơ và lịch của bạn.', kind='MATCH'))
+            db.add(build_notification(db, user_id=student.user_id, shift_id=shift.id, title='Có ca làm phù hợp', body=f'{shift.title} phù hợp {result["score"]}% với hồ sơ và lịch của bạn.', kind='MATCH'))
     db.commit(); db.refresh(shift)
     return {**shift_dict(shift), 'matched_students': matched}
 
@@ -726,7 +1126,7 @@ def apply_shift(req: ApplicationCreate, user: models.User = Depends(user_or_401)
     match = match_student_shift(user.student_profile, shift)
     if not match['available']: raise HTTPException(409, 'Ca làm không phù hợp lịch đã khai báo')
     application = models.Application(student_id=user.id, shift_id=shift.id, match_score=match['score'], match_reasons=', '.join(match['reasons']))
-    db.add(application); db.add(models.Notification(user_id=shift.employer_id, shift_id=shift.id, title='Ứng viên mới cho ca làm', body=f'{user.student_profile.full_name} vừa ứng tuyển {shift.title}.', kind='APPLICATION')); db.commit()
+    db.add(application); db.add(build_notification(db, user_id=shift.employer_id, shift_id=shift.id, title='Ứng viên mới cho ca làm', body=f'{user.student_profile.full_name} vừa ứng tuyển {shift.title}.', kind='APPLICATION')); db.commit()
     return {'message': 'Ứng tuyển thành công', 'application_id': str(application.id), 'match_score': application.match_score}
 
 @app.post('/api/shifts/{shift_id}/invitations', status_code=201)
@@ -746,7 +1146,7 @@ def invite_student(shift_id: uuid.UUID, req: InvitationCreate, user: models.User
         raise HTTPException(409, 'Ca không phù hợp lịch sinh viên')
     application = models.Application(student_id=student.user_id, shift_id=shift.id, status='INVITED', match_score=match['score'], match_reasons=', '.join(match['reasons']))
     db.add(application)
-    db.add(models.Notification(user_id=student.user_id, shift_id=shift.id, title='Lời mời nhận ca làm', body=f'{shift.employer.company_name} mời bạn nhận ca {shift.title}.', kind='INVITATION'))
+    db.add(build_notification(db, user_id=student.user_id, shift_id=shift.id, title='Lời mời nhận ca làm', body=f'{shift.employer.company_name} mời bạn nhận ca {shift.title}.', kind='INVITATION'))
     db.commit()
     return {'id': str(application.id), 'status': 'INVITED'}
 
@@ -784,7 +1184,7 @@ def check_out(application_id: uuid.UUID, user: models.User = Depends(require_rol
     if now < application.shift.end_time:
         raise HTTPException(409, 'Chỉ check-out sau khi ca kết thúc')
     application.checked_out_at = now
-    db.add(models.Notification(user_id=application.shift.employer_id, shift_id=application.shift_id, title='Sinh viên đã check-out', body=f'{user.student_profile.full_name} đã hoàn thành ca {application.shift.title}; vui lòng xác nhận chấm công.', kind='ATTENDANCE'))
+    db.add(build_notification(db, user_id=application.shift.employer_id, shift_id=application.shift_id, title='Sinh viên đã check-out', body=f'{user.student_profile.full_name} đã hoàn thành ca {application.shift.title}; vui lòng xác nhận chấm công.', kind='ATTENDANCE'))
     db.commit()
     return {'id': str(application.id), 'checked_out_at': now.replace(tzinfo=timezone.utc)}
 
@@ -797,7 +1197,7 @@ def complete_application(application_id: uuid.UUID, user: models.User = Depends(
         raise HTTPException(409, 'Ca chưa thể xác nhận hoàn thành')
     application.completed_at = datetime.utcnow()
     application.status = 'COMPLETED'
-    db.add(models.Notification(user_id=application.student_id, shift_id=application.shift_id, title='Ca làm đã hoàn thành', body=f'Chấm công ca {application.shift.title} đã được xác nhận. Bạn có thể đánh giá doanh nghiệp.', kind='ATTENDANCE'))
+    db.add(build_notification(db, user_id=application.student_id, shift_id=application.shift_id, title='Ca làm đã hoàn thành', body=f'Chấm công ca {application.shift.title} đã được xác nhận. Bạn có thể đánh giá doanh nghiệp.', kind='ATTENDANCE'))
     db.flush()
     remaining = db.query(models.Application).filter(models.Application.shift_id == application.shift_id, models.Application.status == 'ACCEPTED').count()
     if remaining == 0:
@@ -844,7 +1244,7 @@ def accept_application(application_id: uuid.UUID, user: models.User = Depends(re
         raise HTTPException(409, 'Lịch sinh viên đã thay đổi, không thể nhận ca')
     application.status = 'ACCEPTED'
     db.add(models.Schedule(student_id=application.student_id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
-    db.add(models.Notification(user_id=application.student_id, shift_id=shift.id, title='Bạn đã được nhận vào ca làm', body=f'Ca {shift.title} đã được xếp vào lịch của bạn.', kind='APPLICATION'))
+    db.add(build_notification(db, user_id=application.student_id, shift_id=shift.id, title='Bạn đã được nhận vào ca làm', body=f'Ca {shift.title} đã được xếp vào lịch của bạn.', kind='APPLICATION'))
     if accepted + 1 >= shift.required_workers:
         shift.status = 'FULL'
     db.commit()
@@ -858,7 +1258,7 @@ def reject_application(application_id: uuid.UUID, user: models.User = Depends(re
     if application.status != 'PENDING':
         raise HTTPException(409, 'Đơn không còn chờ duyệt')
     application.status = 'REJECTED'
-    db.add(models.Notification(user_id=application.student_id, shift_id=application.shift_id, title='Kết quả ứng tuyển', body=f'Đơn ứng tuyển ca {application.shift.title} chưa được chấp nhận.', kind='APPLICATION'))
+    db.add(build_notification(db, user_id=application.student_id, shift_id=application.shift_id, title='Kết quả ứng tuyển', body=f'Đơn ứng tuyển ca {application.shift.title} chưa được chấp nhận.', kind='APPLICATION'))
     db.commit()
     return {'id': str(application.id), 'status': application.status}
 
@@ -885,13 +1285,13 @@ def respond_invitation(application_id: uuid.UUID, req: InvitationResponse, user:
         db.add(models.Schedule(student_id=user.id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
         if accepted + 1 >= shift.required_workers:
             shift.status = 'FULL'
-    db.add(models.Notification(user_id=shift.employer_id, shift_id=shift.id, title='Sinh viên trả lời lời mời', body=f'{user.student_profile.full_name} đã {"nhận" if req.accept else "từ chối"} lời mời ca {shift.title}.', kind='INVITATION'))
+    db.add(build_notification(db, user_id=shift.employer_id, shift_id=shift.id, title='Sinh viên trả lời lời mời', body=f'{user.student_profile.full_name} đã {"nhận" if req.accept else "từ chối"} lời mời ca {shift.title}.', kind='INVITATION'))
     db.commit()
     return {'id': str(application.id), 'status': application.status, 'shift_id': str(shift.id)}
 
 @app.get('/api/notifications')
 def notifications(db: Session = Depends(get_db), user: models.User = Depends(user_or_401)):
-    query = db.query(models.Notification).filter(models.Notification.user_id == user.id).order_by(models.Notification.created_at.desc()).limit(30)
+    query = db.query(models.Notification).filter(models.Notification.user_id == user.id, models.Notification.in_app_enabled.is_(True)).order_by(models.Notification.created_at.desc()).limit(30)
     return [{'id': str(n.id), 'shift_id': str(n.shift_id) if n.shift_id else None, 'title': n.title, 'body': n.body, 'kind': n.kind, 'is_read': n.is_read, 'created_at': n.created_at.replace(tzinfo=timezone.utc).isoformat()} for n in query.all()]
 
 @app.post('/api/push-tokens', status_code=201)

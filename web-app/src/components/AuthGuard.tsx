@@ -6,6 +6,7 @@ import { API_URL } from '@/lib/api';
 
 type Role = 'STUDENT' | 'EMPLOYER' | 'ADMIN';
 const home: Record<Role, string> = { STUDENT: '/student', EMPLOYER: '/dashboard', ADMIN: '/admin' };
+const publicPaths = ['/', '/login', '/register', '/forgot-password', '/pricing', '/support', '/terms', '/privacy'];
 function allowed(path: string, role: Role) {
   if (path === '/profile') return true;
   if (path.startsWith('/admin')) return role === 'ADMIN';
@@ -21,7 +22,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<{ path: string; status: 'ready' | 'error' } | null>(null);
   useEffect(() => {
-    if (['/', '/login', '/register', '/forgot-password'].includes(pathname)) return;
+    if (publicPaths.includes(pathname)) return;
     const controller = new AbortController();
     const validate = async () => {
       let token = '';
@@ -45,7 +46,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     validate();
     return () => controller.abort();
   }, [pathname, router]);
-  if (['/', '/login', '/register', '/forgot-password'].includes(pathname)) return <>{children}</>;
+  if (publicPaths.includes(pathname)) return <>{children}</>;
   if (state?.path === pathname && state.status === 'error') return <div className="auth-loading"><Alert type="error" title="Không thể kết nối máy chủ" description="Vui lòng thử lại sau khi kiểm tra Docker Compose." action={<Button onClick={() => window.location.reload()}>Thử lại</Button>} /></div>;
   if (state?.path !== pathname || state.status !== 'ready') return <div className="auth-loading"><Spin description="Đang xác thực..." /></div>;
   return <>{children}</>;

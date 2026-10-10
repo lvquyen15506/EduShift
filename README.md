@@ -41,3 +41,32 @@ Khi triển khai thật, cấu hình `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`,
 cùng `JWT_SECRET` riêng. Không dùng Mailpit làm SMTP sản xuất.
 
 Build mobile và cấu hình EAS được mô tả trong [mobile-app/README.md](mobile-app/README.md).
+
+## Gói đăng ca và thanh toán
+
+Doanh nghiệp đã được duyệt có 5 lượt đăng ca Free tổng cộng. Ca tạo thành công mới
+trừ lượt; lượt đã dùng không được hoàn khi đóng hoặc xóa ca. `GET /api/employer/plan`
+trả gói hiện tại, lượt đã dùng/còn lại và hạn dùng. `GET /api/plans` trả các gói
+đang bán; admin quản lý gói tại `/admin/plans` và API `/api/admin/plans`. Gói đã
+mua giữ giá, hạn mức và thời hạn tại lúc tạo đơn.
+
+`PAYMENTS_MODE` mặc định là `disabled`. Để thử luồng mua trên máy local, đặt
+`PAYMENTS_MODE=sandbox` trong `.env` của Docker Compose rồi khởi động lại API.
+Checkout sandbox tại `/checkout/<payment-id>` cho phép mô phỏng thành công hoặc
+hủy; webhook thử nghiệm `POST /api/payments/webhook` cần header
+`x-edushift-signature` là HMAC-SHA256 của nguyên body với
+`PAYMENT_WEBHOOK_SECRET`. Chỉ phản hồi thành công hợp lệ mới kích hoạt gói;
+gửi lại cùng sự kiện không cộng thêm lượt. Sandbox không xử lý tiền thật.
+
+Các API mới: `GET /api/public/shifts`, `GET /api/employer/plan`,
+`GET /api/plans`, `GET /api/payments/config`, `POST /api/employer/checkout`,
+`GET /api/employer/payments`, `GET /api/employer/payments/{id}`,
+`POST /api/payments/sandbox/{id}`, `POST /api/payments/webhook`,
+`/api/admin/plans`, `/api/admin/users` và `/api/admin/notification-policies`.
+Chi tiết payload và quyền truy cập có tại `/docs` của API.
+
+Trang `/pricing`, `/support`, `/terms` và `/privacy` mở công khai. Điều khoản và
+chính sách riêng tư hiện là bản nháp; kênh hỗ trợ chính thức sẽ hiển thị sau khi
+cấu hình `NEXT_PUBLIC_SUPPORT_EMAIL` lúc build image web. Trước khi mở thanh
+toán thật cần chọn nhà cung cấp, tài khoản merchant, khóa và webhook HTTPS,
+đồng thời duyệt nội dung pháp lý và thông tin hỗ trợ.

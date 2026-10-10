@@ -9,7 +9,8 @@ import httpx
 from sqlalchemy import or_
 
 from .database import SessionLocal
-from .models import Notification, PushToken
+from .models import Notification, PushToken, User
+from .email_delivery import EmailDeliveryError, send_notification_email
 
 EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ def deliver_once(db, notification_id: uuid.UUID | None = None) -> bool:
             Notification.created_at >= PushToken.registered_at,
             PushToken.registered_at >= now - timedelta(days=30),
             Notification.push_sent_at.is_(None),
+            Notification.push_enabled.is_(True),
             Notification.push_attempts < 5,
             or_(Notification.push_next_attempt_at.is_(None), Notification.push_next_attempt_at <= now),
         )
@@ -69,12 +71,37 @@ def deliver_once(db, notification_id: uuid.UUID | None = None) -> bool:
     return True
 
 
+def deliver_email_once(db, notification_id: uuid.UUID | None = None) -> bool:
+    now = datetime.utcnow()
+    query = (db.query(Notification, User).join(User, User.id == Notification.user_id)
+        .filter(Notification.email_enabled.is_(True), Notification.email_sent_at.is_(None),
+                Notification.email_attempts < 5, User.email.isnot(None),
+                User.is_active.is_(True), User.deleted_at.is_(None),
+                or_(Notification.email_next_attempt_at.is_(None), Notification.email_next_attempt_at <= now)))
+    if notification_id:
+        query = query.filter(Notification.id == notification_id)
+    pair = query.order_by(Notification.created_at).with_for_update(skip_locked=True, of=Notification).first()
+    if not pair: return False
+    notification, user = pair
+    try:
+        send_notification_email(user.email, notification.title, notification.body)
+        notification.email_sent_at = now
+        db.commit()
+    except EmailDeliveryError as exc:
+        notification.email_attempts = (notification.email_attempts or 0) + 1
+        notification.email_next_attempt_at = now + timedelta(seconds=min(3600, 30 * 2 ** notification.email_attempts))
+        db.commit()
+        logger.warning('Notification email attempt %s failed: %s', notification.email_attempts, exc)
+    return True
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     while True:
         try:
             with SessionLocal() as db:
                 worked = deliver_once(db)
+                worked = deliver_email_once(db) or worked
         except Exception:
             logger.exception('Push worker iteration failed')
             worked = False

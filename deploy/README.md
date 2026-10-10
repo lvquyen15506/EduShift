@@ -77,6 +77,15 @@ Sau mỗi deploy, script kiểm tra API và web qua loopback. Nếu bản mới
 không khỏe và có tag trước đó trong .env, script thử khởi động lại tag
 trước. Rollback image không tự khôi phục dữ liệu PostgreSQL.
 
+Các gói đăng ca và dữ liệu thuê bao được tạo bằng migration khi API khởi động.
+Trước lần phát hành này, sao lưu PostgreSQL và kiểm tra có thể khôi phục. Khi
+rollback, xem log API và kiểm tra `/api/health`, `/api/plans`, đăng nhập và tạo
+ca trên môi trường thử trước khi đổi tag. Không xóa bảng mới hoặc chỉnh ngược
+schema khi chưa đối chiếu dữ liệu giao dịch. Trên production giữ
+`PAYMENTS_MODE=disabled`: mã hiện tại chỉ có adapter sandbox, chưa kết nối cổng
+thanh toán thật. Chỉ bật thanh toán thật sau khi tích hợp provider, cấu hình khóa
+riêng trong secret, xác thực webhook HTTPS và kiểm thử đối soát.
+
 ## 5. Vận hành
 
 ~~~bash

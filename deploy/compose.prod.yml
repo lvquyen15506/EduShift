@@ -26,6 +26,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://edushift.site}
+      PAYMENTS_MODE: ${PAYMENTS_MODE:-disabled}
       SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST in .env}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM in .env}
@@ -51,6 +52,13 @@ services:
       api: {condition: service_healthy}
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST in .env}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM in .env}
+      SMTP_USERNAME: ${SMTP_USERNAME:?Set SMTP_USERNAME in .env}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_SSL: ${SMTP_SSL:-false}
     mem_limit: 256m
 
   web:

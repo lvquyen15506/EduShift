@@ -17,11 +17,14 @@ const navigation = {
   ],
   EMPLOYER: [
     { href: '/dashboard', label: 'Tổng quan', icon: <DashboardOutlined /> },
+    { href: '/pricing', label: 'Gói đăng ca', icon: <AppstoreOutlined /> },
     { href: '/shifts', label: 'Ca làm việc', icon: <CalendarOutlined /> },
     { href: '/candidates', label: 'Ứng viên', icon: <TeamOutlined /> },
   ],
   ADMIN: [
     { href: '/admin', label: 'Điều hành', icon: <AppstoreOutlined /> },
+    { href: '/admin/plans', label: 'Gói đăng ca', icon: <AppstoreOutlined /> },
+    { href: '/admin/notifications', label: 'Thông báo', icon: <BellOutlined /> },
     { href: '/admin/users', label: 'Tài khoản', icon: <UserOutlined /> },
     { href: '/admin/shifts', label: 'Ca làm việc', icon: <UnorderedListOutlined /> },
   ],
