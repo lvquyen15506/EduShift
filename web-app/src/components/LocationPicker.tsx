@@ -7,6 +7,7 @@ type GeoPoint = { latitude: number; longitude: number };
 const isVietnam = (latitude: number, longitude: number) => latitude >= 8 && latitude <= 24 && longitude >= 102 && longitude <= 110;
 const distance = (item: SearchResult, point: GeoPoint) => Math.hypot(Number(item.lat) - point.latitude, Number(item.lon) - point.longitude);
 function nearest(items: SearchResult[], point: GeoPoint | null) { return point ? [...items].sort((a, b) => distance(a, point) - distance(b, point)) : items; }
+function unique(items: SearchResult[]) { const seen = new Set<string>(); return items.filter(item => { const key = Number(item.lat).toFixed(5) + ',' + Number(item.lon).toFixed(5); if (seen.has(key)) return false; seen.add(key); return true; }); }
 async function photonSearch(value: string, signal: AbortSignal, point: GeoPoint | null): Promise<SearchResult[]> {
   const nearby = point ? '&lat=' + point.latitude + '&lon=' + point.longitude : '';
   const response = await fetch('https://photon.komoot.io/api/?lang=default&limit=20' + nearby + '&q=' + encodeURIComponent(value), { signal });
@@ -29,11 +30,15 @@ export default function LocationPicker({ initialLocation = '', initialLatitude =
       try {
         const viewbox = nearby ? '&viewbox=' + (nearby.longitude - 0.8) + ',' + (nearby.latitude + 0.8) + ',' + (nearby.longitude + 0.8) + ',' + (nearby.latitude - 0.8) : '';
         const nominatimUrl = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=12&countrycodes=vn&bounded=0' + viewbox + '&q=' + encodeURIComponent(value);
-        const nominatimResponse = await fetch(nominatimUrl, { signal: controller.signal, headers: { 'Accept-Language': 'vi' } });
-        if (!nominatimResponse.ok) throw new Error('search failed');
-        const items = await nominatimResponse.json() as SearchResult[];
-        const localItems = items.filter(item => isVietnam(Number(item.lat), Number(item.lon)));
-        setResults(nearest(localItems.length ? localItems : await photonSearch(value, controller.signal, nearby), nearby).slice(0, 8)); setSearched(true);
+        const [nominatim, photon] = await Promise.allSettled([
+          fetch(nominatimUrl, { signal: controller.signal, headers: { 'Accept-Language': 'vi' } }).then(response => response.ok ? response.json() as Promise<SearchResult[]> : Promise.reject(new Error('search failed'))),
+          photonSearch(value, controller.signal, nearby),
+        ]);
+        const nominatimItems = nominatim.status === 'fulfilled' ? nominatim.value : [];
+        const photonItems = photon.status === 'fulfilled' ? photon.value : [];
+        const localItems = unique([...nominatimItems, ...photonItems].filter(item => isVietnam(Number(item.lat), Number(item.lon))));
+        if (!localItems.length && nominatim.status === 'rejected' && photon.status === 'rejected') throw new Error('search failed');
+        setResults(nearest(localItems, nearby).slice(0, 8)); setSearched(true);
       } catch (error) {
         if ((error as Error).name !== 'AbortError') { try { setResults(nearest(await photonSearch(value, controller.signal, nearby), nearby).slice(0, 8)); setSearched(true); } catch { setResults([]); setSearchError(true); setSearched(true); } }
       } finally { if (!controller.signal.aborted) setSearching(false); }
