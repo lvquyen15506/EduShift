@@ -335,7 +335,7 @@ def require_role(*roles):
 
 
 def shift_dict(shift: models.JobShift):
-    data = {k: getattr(shift, k) for k in ['id','title','description','location','start_time','end_time','hourly_rate','required_workers','status']}
+    data = {k: getattr(shift, k) for k in ['id','title','description','location','latitude','longitude','start_time','end_time','hourly_rate','required_workers','status']}
     for key in ('start_time', 'end_time'):
         if data[key] is not None and data[key].tzinfo is None:
             data[key] = data[key].replace(tzinfo=timezone.utc)
@@ -1011,6 +1011,8 @@ def public_shifts(
             'start_time': shift.start_time.replace(tzinfo=timezone.utc),
             'end_time': shift.end_time.replace(tzinfo=timezone.utc),
             'hourly_rate': shift.hourly_rate,
+            'latitude': shift.latitude,
+            'longitude': shift.longitude,
             'required_workers': shift.required_workers,
             'remaining_workers': remaining,
         })
