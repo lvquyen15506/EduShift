@@ -15,6 +15,8 @@ export type Shift = {
   description: string;
   company_name: string;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
   start_time: string;
   end_time: string;
   hourly_rate: number;

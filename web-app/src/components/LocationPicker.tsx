@@ -1,27 +1,12 @@
 'use client';
-
-import { useEffect, useRef, useState } from 'react';
-
+import { useEffect, useState } from 'react';
 type Props = { initialLocation?: string; initialLatitude?: number | null; initialLongitude?: number | null };
-const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type GoogleMapsWindow = Window & { google?: any };
+type SearchResult = { display_name: string; lat: string; lon: string };
+function mapUrl(latitude: number, longitude: number) { const delta = 0.0035; return 'https://www.openstreetmap.org/export/embed.html?bbox=' + (longitude - delta) + ',' + (latitude - delta) + ',' + (longitude + delta) + ',' + (latitude + delta) + '&layer=mapnik&marker=' + latitude + ',' + longitude; }
 export default function LocationPicker({ initialLocation = '', initialLatitude = null, initialLongitude = null }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [ready, setReady] = useState(() => typeof window !== 'undefined' && Boolean((window as GoogleMapsWindow).google?.maps?.places));
-  const [selected, setSelected] = useState({ location: initialLocation, latitude: initialLatitude, longitude: initialLongitude });
-  useEffect(() => {
-    if (!mapsKey) return;
-    const existing = document.querySelector('script[data-edushift-maps]');
-    if (existing) { existing.addEventListener('load', () => setReady(true), { once: true }); return; }
-    const script = document.createElement('script'); script.dataset.edushiftMaps = 'true'; script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places`; script.async = true; script.onload = () => setReady(true); document.head.appendChild(script);
-  }, []);
-  useEffect(() => {
-    if (!ready || !inputRef.current || !(window as GoogleMapsWindow).google?.maps?.places) return;
-    const autocomplete = new (window as GoogleMapsWindow).google.maps.places.Autocomplete(inputRef.current, { fields: ['formatted_address', 'geometry', 'name'], componentRestrictions: { country: 'vn' } });
-    autocomplete.addListener('place_changed', () => { const place = autocomplete.getPlace(); const point = place.geometry?.location; if (!point) return; setSelected({ location: place.formatted_address || place.name || inputRef.current?.value || '', latitude: point.lat(), longitude: point.lng() }); });
-    return () => (window as GoogleMapsWindow).google?.maps?.event?.clearInstanceListeners(autocomplete);
-  }, [ready]);
-  const fallbackMap = selected.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.location)}` : 'https://www.google.com/maps';
-  return <div className="location-picker"><label>Tên quán / địa chỉ<input ref={inputRef} name="location" required defaultValue={selected.location} placeholder="Tìm tên quán, số nhà, đường..." autoComplete="off" /></label><input type="hidden" name="latitude" value={selected.latitude ?? ''} /><input type="hidden" name="longitude" value={selected.longitude ?? ''} /><p>{mapsKey ? (ready ? 'Chọn một địa điểm trong danh sách Google Maps để lưu chính xác vị trí.' : 'Đang tải tìm kiếm Google Maps...') : 'Nhập địa chỉ rồi mở Google Maps để kiểm tra. Admin cần cấu hình NEXT_PUBLIC_GOOGLE_MAPS_API_KEY để bật gợi ý tự động.'}</p>{selected.latitude != null && selected.longitude != null && <iframe title="Vị trí đã chọn" loading="lazy" src={`https://www.google.com/maps?q=${selected.latitude},${selected.longitude}&z=16&output=embed`} />}{!mapsKey && <a href={fallbackMap} target="_blank" rel="noreferrer">Mở Google Maps kiểm tra địa chỉ ↗</a>}</div>;
+  const [query, setQuery] = useState(initialLocation); const [results, setResults] = useState<SearchResult[]>([]); const [selected, setSelected] = useState({ location: initialLocation, latitude: initialLatitude, longitude: initialLongitude });
+  useEffect(() => { const value = query.trim(); if (value.length < 3 || value === selected.location) return; const timer = window.setTimeout(() => { fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&countrycodes=vn&q=' + encodeURIComponent(value), { headers: { 'Accept-Language': 'vi' } }).then(response => response.ok ? response.json() : Promise.reject(new Error('search failed'))).then((items: SearchResult[]) => setResults(items)).catch(() => setResults([])); }, 350); return () => window.clearTimeout(timer); }, [query, selected.location]);
+  function choose(item: SearchResult) { setQuery(item.display_name); setResults([]); setSelected({ location: item.display_name, latitude: Number(item.lat), longitude: Number(item.lon) }); }
+  const map = selected.latitude != null && selected.longitude != null ? mapUrl(selected.latitude, selected.longitude) : '';
+  return <div className='location-picker'><label>Tên quán / địa chỉ<input name='location' required value={query} onChange={event => { setQuery(event.target.value); setResults([]); setSelected({ location: '', latitude: null, longitude: null }); }} placeholder='Tìm tên quán, số nhà, đường...' autoComplete='off' /></label>{results.length > 0 && <div className='location-results' role='listbox'>{results.map(item => <button type='button' key={item.lat + item.lon} onClick={() => choose(item)}>{item.display_name}</button>)}</div>}<input type='hidden' name='latitude' value={selected.latitude ?? ''} /><input type='hidden' name='longitude' value={selected.longitude ?? ''} /><p>Nhập tên quán hoặc địa chỉ rồi chọn kết quả OpenStreetMap để lưu vị trí chính xác.</p>{map && <iframe title='Vị trí đã chọn' loading='lazy' src={map} />}</div>;
 }
