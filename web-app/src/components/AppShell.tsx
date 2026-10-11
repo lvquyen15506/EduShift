@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { AppstoreOutlined, BellOutlined, CalendarOutlined, DashboardOutlined, DownOutlined, LogoutOutlined, MenuOutlined, SearchOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BellOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, DashboardOutlined, DownOutlined, LogoutOutlined, MenuOutlined, SearchOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Divider, Drawer, Popover } from 'antd';
 import { api } from '@/lib/api';
 
@@ -30,7 +30,9 @@ const navigation = {
   ],
 };
 const home = { STUDENT: '/student', EMPLOYER: '/dashboard', ADMIN: '/admin' };
-function notificationTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }); }
+function notificationTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+const notificationMeta: Record<string, { label: string; className: string; icon: React.ReactNode }> = { MATCH: { label: 'CA PHÙ HỢP', className: 'pink', icon: <BellOutlined /> }, APPLICATION: { label: 'ỨNG TUYỂN', className: 'green', icon: <TeamOutlined /> }, INVITATION: { label: 'LỜI MỜI', className: 'purple', icon: <CheckCircleOutlined /> }, SUCCESS: { label: 'HOÀN TẤT', className: 'green', icon: <CheckCircleOutlined /> }, SHIFT: { label: 'CA LÀM', className: 'yellow', icon: <ClockCircleOutlined /> } };
+function notificationKind(kind: string) { return notificationMeta[kind] || { label: 'CẬP NHẬT', className: 'pink', icon: <BellOutlined /> }; }
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname(); const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -60,7 +62,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const notificationPanel = <div className="notification-popover">
     <div className="notification-popover-head"><div><strong>Thông báo</strong><Badge count={unread} /></div><Button type="link" size="small" onClick={markRead}>Đánh dấu tất cả đã đọc</Button></div>
     <Divider />
-    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => <div className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id}><span className="notification-popover-icon pink"><BellOutlined /></span><div><b>{item.title}</b><p>{item.body}</p><small>{notificationTime(item.created_at)}</small></div>{!item.is_read && <i />}</div>) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
+    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => { const meta = notificationKind(item.kind); return <div className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id}><span className={'notification-popover-icon ' + meta.className}>{meta.icon}</span><div className="notification-popover-copy"><div className="notification-popover-meta"><span>{meta.label}</span><time>{notificationTime(item.created_at)}</time></div><b>{item.title}</b><p>{item.body}</p></div>{!item.is_read && <i aria-label="Chưa đọc" />}</div>; }) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
     <Divider /><Link href="/notifications" className="notification-popover-footer">Xem tất cả thông báo</Link>
   </div>;
   const accountPanel = <div className="account-popover">
