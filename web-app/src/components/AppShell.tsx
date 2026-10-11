@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { AppstoreOutlined, BellOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, DashboardOutlined, DownOutlined, LogoutOutlined, MenuOutlined, SearchOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Divider, Drawer, Popover } from 'antd';
 import { api } from '@/lib/api';
+import ChatWidget from '@/components/ChatWidget';
 
 type Role = 'STUDENT' | 'EMPLOYER' | 'ADMIN';
 type User = { role: Role; username?: string; email?: string; avatar_data?: string | null; profile?: { full_name?: string; company_name?: string } };
@@ -98,11 +99,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Popover trigger={['hover', 'click']} placement="bottomRight" arrow={false} content={accountPanel}><button type="button" className="user-chip account-trigger" aria-label="Mở menu tài khoản" aria-haspopup="true"><Avatar size={36} src={user?.avatar_data || undefined} style={{ backgroundColor: '#FFE0EA', color: '#B10E6B', fontWeight: 700 }}>{initials}</Avatar><span className="account-trigger-text"><b>{name}</b><small>{role === 'ADMIN' ? 'Quản trị viên' : role === 'STUDENT' ? 'Sinh viên' : 'Doanh nghiệp'}</small></span><DownOutlined className="account-chevron" /></button></Popover>
       </div>
     </header>
-    <Drawer className="product-mobile-drawer" title={<Link href={home[role]} className="brand" onClick={() => setMobileMenuOpen(false)}><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span></span></Link>} placement="left" width="min(320px, 88vw)" open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
+    <Drawer className="product-mobile-drawer" title={<Link href={home[role]} className="brand" onClick={() => setMobileMenuOpen(false)}><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span></span></Link>} placement="left" size={320} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
       <span className="mobile-menu-caption">{role === 'STUDENT' ? 'Không gian sinh viên' : role === 'ADMIN' ? 'Bảng điều hành' : 'Không gian doanh nghiệp'}</span>
       <nav id="mobile-product-navigation" className="mobile-product-nav" aria-label="Điều hướng mobile">{navigation[role].map(link => <Link key={link.href} href={link.href} className={isActive(link.href) ? 'active' : ''} aria-current={isActive(link.href) ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span>{link.icon}</span>{link.label}</Link>)}<Link href="/notifications" className={pathname === '/notifications' ? 'active' : ''} aria-current={pathname === '/notifications' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span><BellOutlined /></span>Thông báo{unread > 0 && <Badge count={unread} size="small" />}</Link><Link href="/profile" className={pathname === '/profile' ? 'active' : ''} aria-current={pathname === '/profile' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span><UserOutlined /></span>Hồ sơ cá nhân</Link></nav>
       <button className="mobile-menu-logout" type="button" onClick={logout}><LogoutOutlined /> Đăng xuất</button>
     </Drawer>
-    <main className="product-content">{children}</main>
+    <main className="product-content">{children}</main><ChatWidget support={Boolean(user)} />
   </div>;
 }

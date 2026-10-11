@@ -4,6 +4,7 @@ import LandingMotion from './landing-motion';
 import LandingSlider from './landing-slider';
 import PublicShifts from './public-shifts';
 import LandingPricing from './landing-pricing';
+import ChatWidget from '@/components/ChatWidget';
 
 const steps = [
   { n: '01', title: 'Đồng bộ lịch học', body: 'Đưa thời khóa biểu vào EduShift để thấy rõ những khoảng thời gian bạn có thể đi làm.' },
@@ -64,5 +65,6 @@ export default function Home() {
 
     <section className="landing-final landing-reveal"><span className="landing-label">BẮT ĐẦU TỪ HÔM NAY</span><h2>Một lịch rõ ràng.<br /><em>Nhiều cơ hội mở ra.</em></h2><p>Tạo tài khoản EduShift và tìm ca làm phù hợp với nhịp học của bạn.</p><Link href="/register" className="landing-button">Khám phá ca làm <span aria-hidden="true">↗</span></Link></section>
     <footer className="landing-footer"><div><Link href="/" className="landing-brand"><span className="landing-brand-mark">E<span>✦</span></span><strong>Edu<span>Shift</span></strong></Link><small>© 2026 EduShift · Kết nối việc làm theo lịch học.</small></div><nav aria-label="Liên kết cuối trang"><div><strong>Sinh viên</strong><Link href="/register">Tạo tài khoản</Link><Link href="/login">Tìm ca làm</Link></div><div><strong>Doanh nghiệp</strong><Link href="/pricing">Bảng giá</Link><Link href="/register">Đăng ca</Link></div><div><strong>Hỗ trợ & pháp lý</strong><Link href="/support">Hỗ trợ, liên hệ</Link><Link href="/terms">Điều khoản</Link><Link href="/privacy">Riêng tư</Link></div></nav><a href="#top">Lên đầu trang ↑</a></footer>
+    <ChatWidget />
   </main>;
 }

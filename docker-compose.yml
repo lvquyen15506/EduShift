@@ -30,6 +30,8 @@ services:
       SMTP_SSL: ${SMTP_SSL:-false}
       PAYMENTS_MODE: ${PAYMENTS_MODE:-disabled}
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
     depends_on:
       db: {condition: service_healthy}
       mailpit: {condition: service_started}
