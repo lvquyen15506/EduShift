@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { AppstoreOutlined, BellOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, DashboardOutlined, DownOutlined, LogoutOutlined, MenuOutlined, SearchOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, BellOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined, DashboardOutlined, DownOutlined, LogoutOutlined, MenuOutlined, SearchOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Divider, Drawer, Popover } from 'antd';
 import { api } from '@/lib/api';
 
@@ -27,6 +27,7 @@ const navigation = {
     { href: '/admin/notifications', label: 'Thông báo', icon: <BellOutlined /> },
     { href: '/admin/users', label: 'Tài khoản', icon: <UserOutlined /> },
     { href: '/admin/shifts', label: 'Ca làm việc', icon: <UnorderedListOutlined /> },
+    { href: '/admin/settings', label: 'Cấu hình', icon: <SettingOutlined /> },
   ],
 };
 const home = { STUDENT: '/student', EMPLOYER: '/dashboard', ADMIN: '/admin' };

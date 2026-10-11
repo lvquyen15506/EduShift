@@ -94,6 +94,8 @@ def migrate_schema():
         "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS plan_name VARCHAR(120) NOT NULL DEFAULT ''",
         "ALTER TABLE employer_payments ADD COLUMN IF NOT EXISTS provider_event_id VARCHAR(100) UNIQUE",
         "CREATE TABLE IF NOT EXISTS admin_audit (id UUID PRIMARY KEY, actor_id UUID NOT NULL REFERENCES users(id), action VARCHAR(100) NOT NULL, target_id VARCHAR(100) NOT NULL, detail TEXT NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "CREATE TABLE IF NOT EXISTS system_settings (key VARCHAR(120) PRIMARY KEY, value TEXT NOT NULL DEFAULT '', group_name VARCHAR(40) NOT NULL DEFAULT 'general', is_public BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+        "INSERT INTO system_settings (key, value, group_name, is_public) VALUES ('brand_name', 'EduShift', 'branding', TRUE), ('brand_tagline', 'Đúng người, đúng ca', 'branding', TRUE), ('brand_logo_url', '', 'branding', TRUE), ('brand_primary_color', '#B10E6B', 'branding', TRUE), ('seo_title', 'EduShift · Đúng người, đúng ca', 'seo', TRUE), ('seo_description', 'Nền tảng kết nối việc làm part-time theo lịch học.', 'seo', TRUE), ('seo_keywords', 'việc làm part-time, sinh viên, ca làm, EduShift', 'seo', TRUE), ('seo_og_image', '', 'seo', TRUE), ('landing_hero_title', 'Tìm đúng người. Nhận đúng ca.', 'landing', TRUE), ('landing_hero_description', 'Kết nối sinh viên với các ca làm phù hợp lịch học.', 'landing', TRUE), ('landing_maintenance', 'false', 'landing', TRUE) ON CONFLICT (key) DO NOTHING",
         "CREATE TABLE IF NOT EXISTS notification_policies (kind VARCHAR(30) PRIMARY KEY, title_template VARCHAR(220) NOT NULL DEFAULT '{title}', body_template TEXT NOT NULL DEFAULT '{body}', in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE, email_enabled BOOLEAN NOT NULL DEFAULT FALSE, push_enabled BOOLEAN NOT NULL DEFAULT TRUE, version INTEGER NOT NULL DEFAULT 1, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
         "INSERT INTO notification_policies (kind, title_template, body_template, in_app_enabled, email_enabled, push_enabled, version, updated_at) VALUES ('INFO', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('MATCH', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('APPLICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('INVITATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('ATTENDANCE', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('VERIFICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP) ON CONFLICT (kind) DO NOTHING",
         "INSERT INTO employer_plans (id, code, name, post_limit, price, description, is_active, created_at) SELECT '00000000-0000-0000-0000-000000000001', 'FREE', 'Miễn phí', 5, 0, '5 lượt đăng ca miễn phí tổng cộng', TRUE, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM employer_plans WHERE code = 'FREE')",
@@ -686,6 +688,50 @@ def delete_schedule(schedule_id: uuid.UUID, user: models.User = Depends(require_
 def admin_dashboard(user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
     users = db.query(models.User).order_by(models.User.created_at.desc()).limit(8).all()
     return {'stats': {'users': db.query(models.User).count(), 'students': db.query(models.Student).count(), 'employers': db.query(models.Employer).count(), 'shifts': db.query(models.JobShift).count(), 'applications': db.query(models.Application).count(), 'unverified_employers': db.query(models.Employer).filter(models.Employer.is_verified == False).count()}, 'recent_users': [{'id': str(u.id), 'name': u.student_profile.full_name if u.student_profile else u.employer_profile.company_name if u.employer_profile else u.username or u.email, 'email': u.email, 'role': u.role, 'created_at': u.created_at.isoformat()} for u in users]}
+
+DEFAULT_SYSTEM_SETTINGS = {
+    'brand_name': ('EduShift', 'branding', True), 'brand_tagline': ('Đúng người, đúng ca', 'branding', True),
+    'brand_logo_url': ('', 'branding', True), 'brand_primary_color': ('#B10E6B', 'branding', True),
+    'seo_title': ('EduShift · Đúng người, đúng ca', 'seo', True), 'seo_description': ('Nền tảng kết nối việc làm part-time theo lịch học.', 'seo', True),
+    'seo_keywords': ('việc làm part-time, sinh viên, ca làm, EduShift', 'seo', True), 'seo_og_image': ('', 'seo', True),
+    'landing_hero_title': ('Tìm đúng người. Nhận đúng ca.', 'landing', True), 'landing_hero_description': ('Kết nối sinh viên với các ca làm phù hợp lịch học.', 'landing', True),
+    'landing_maintenance': ('false', 'landing', True),
+}
+
+def setting_dict(item: models.SystemSetting):
+    return {'key': item.key, 'value': item.value, 'group_name': item.group_name, 'is_public': item.is_public, 'updated_at': item.updated_at.isoformat() if item.updated_at else None}
+
+@app.get('/api/public/settings')
+def public_settings(db: Session = Depends(get_db)):
+    rows = db.query(models.SystemSetting).filter(models.SystemSetting.is_public == True).all()
+    values = {row.key: row.value for row in rows}
+    for key, (value, _, _) in DEFAULT_SYSTEM_SETTINGS.items(): values.setdefault(key, value)
+    return values
+
+@app.get('/api/admin/settings')
+def admin_settings(actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    rows = {row.key: row for row in db.query(models.SystemSetting).all()}
+    result = []
+    for key, (value, group_name, is_public) in DEFAULT_SYSTEM_SETTINGS.items():
+        result.append(setting_dict(rows[key]) if key in rows else {'key': key, 'value': value, 'group_name': group_name, 'is_public': is_public, 'updated_at': None})
+    result.extend(setting_dict(row) for key, row in rows.items() if key not in DEFAULT_SYSTEM_SETTINGS)
+    return result
+
+class SystemSettingUpdate(BaseModel):
+    value: str = Field(max_length=10000)
+
+@app.put('/api/admin/settings/{key}')
+def update_system_setting(key: str, req: SystemSettingUpdate, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
+    if key not in DEFAULT_SYSTEM_SETTINGS: raise HTTPException(404, 'Không tìm thấy cấu hình')
+    value, group_name, is_public = DEFAULT_SYSTEM_SETTINGS[key]
+    row = db.query(models.SystemSetting).filter_by(key=key).with_for_update().first()
+    if row is None:
+        row = models.SystemSetting(key=key, value=req.value, group_name=group_name, is_public=is_public)
+        db.add(row)
+    else: row.value = req.value
+    audit_admin(db, actor.id, 'SYSTEM_SETTING_UPDATE', key, {'value': req.value})
+    db.commit(); db.refresh(row)
+    return setting_dict(row)
 
 @app.get('/api/admin/users')
 def admin_users(q: Optional[str] = None, role: Optional[str] = None, user: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):

@@ -97,6 +97,14 @@ class AdminAudit(Base):
     detail = Column(Text, nullable=False, default='')
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+class SystemSetting(Base):
+    __tablename__ = 'system_settings'
+    key = Column(String(120), primary_key=True)
+    value = Column(Text, nullable=False, default='')
+    group_name = Column(String(40), nullable=False, default='general')
+    is_public = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
 class Schedule(Base):
     __tablename__ = 'schedules'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

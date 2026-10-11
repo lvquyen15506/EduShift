@@ -1,0 +1,17 @@
+'use client';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Card, Col, Input, Row, Skeleton, Space, Tabs, Typography, message } from 'antd';
+import AppShell from '@/components/AppShell';
+import { api } from '@/lib/api';
+type Setting = { key: string; value: string; group_name: string; is_public: boolean };
+const groups = { branding: { label: 'Thương hiệu', keys: ['brand_name', 'brand_tagline', 'brand_logo_url', 'brand_primary_color'] }, seo: { label: 'SEO & chia sẻ', keys: ['seo_title', 'seo_description', 'seo_keywords', 'seo_og_image'] }, landing: { label: 'Landing page', keys: ['landing_hero_title', 'landing_hero_description', 'landing_maintenance'] } } as const;
+const labels: Record<string, string> = { brand_name: 'Tên thương hiệu', brand_tagline: 'Thông điệp ngắn', brand_logo_url: 'URL logo', brand_primary_color: 'Màu chủ đạo', seo_title: 'Tiêu đề SEO', seo_description: 'Mô tả SEO', seo_keywords: 'Từ khóa', seo_og_image: 'Ảnh chia sẻ (OG image)', landing_hero_title: 'Tiêu đề hero', landing_hero_description: 'Mô tả hero', landing_maintenance: 'Bảo trì landing (true/false)' };
+export default function AdminSettingsPage() {
+  const [settings, setSettings] = useState<Record<string, Setting>>({}); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState<string | null>(null);
+  useEffect(() => { api<Setting[]>('/api/admin/settings').then(rows => setSettings(Object.fromEntries(rows.map(row => [row.key, row])))).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []);
+  const update = (key: string, value: string) => setSettings(current => ({ ...current, [key]: { ...current[key], key, value } }));
+  const save = async (key: string) => { setSaving(key); try { const row = await api<Setting>('/api/admin/settings/' + encodeURIComponent(key), { method: 'PUT', body: JSON.stringify({ value: settings[key].value }) }); setSettings(current => ({ ...current, [key]: row })); message.success('Đã lưu cấu hình'); } catch (e) { message.error(e instanceof Error ? e.message : 'Không thể lưu'); } finally { setSaving(null); } };
+  const panel = (key: string) => { const row = settings[key]; if (!row) return null; const multiline = key.includes('description') || key === 'seo_keywords'; return <Card key={key} size="small" className="admin-settings-card"><Space direction="vertical" style={{ width: '100%' }} size={8}><Typography.Text strong>{labels[key] || key}</Typography.Text>{multiline ? <Input.TextArea rows={3} value={row.value} onChange={e => update(key, e.target.value)} /> : <Input value={row.value} onChange={e => update(key, e.target.value)} />}<Button type="primary" loading={saving === key} onClick={() => void save(key)}>Lưu thay đổi</Button></Space></Card>; };
+  const items = useMemo(() => Object.entries(groups).map(([key, group]) => ({ key, label: group.label, children: <Row gutter={[16, 16]}>{group.keys.map(settingKey => <Col xs={24} md={12} key={settingKey}>{panel(settingKey)}</Col>)}</Row> })), [settings, saving]);
+  return <AppShell><div className="role-page admin-page"><div className="role-heading"><div><span className="eyebrow">QUẢN TRỊ / CẤU HÌNH</span><h1>Cấu hình hệ thống</h1><p>Quản lý thương hiệu, nội dung landing và thông tin SEO từ một nơi.</p></div></div>{error && <Alert type="error" title={error} />}{loading ? <Skeleton active /> : <Tabs items={items} />}</div></AppShell>;
+}
