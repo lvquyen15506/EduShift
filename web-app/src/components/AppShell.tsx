@@ -64,10 +64,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const markRead = async () => {
     try { await api('/api/notifications/read-all', { method: 'PATCH' }); setNotifications(items => items.map(item => ({ ...item, is_read: true }))); } catch { /* Keep actual state on API error. */ }
   };
+  const openNotification = async (item: Notification) => {
+    if (!item.is_read) {
+      setNotifications(items => items.map(current => current.id === item.id ? { ...current, is_read: true } : current));
+      try { await api('/api/notifications/' + encodeURIComponent(item.id) + '/read', { method: 'PATCH' }); } catch { /* Keep optimistic UI state. */ }
+    }
+    router.push(notificationTarget(item));
+  };
   const notificationPanel = <div className="notification-popover">
     <div className="notification-popover-head"><div><strong>Thông báo</strong><Badge count={unread} /></div><Button type="link" size="small" onClick={markRead}>Đánh dấu tất cả đã đọc</Button></div>
     <Divider />
-    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => { const meta = notificationKind(item.kind); return <button type="button" className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id} onClick={() => router.push(notificationTarget(item))}><span className={'notification-popover-icon ' + meta.className}>{meta.icon}</span><span className="notification-popover-copy"><span className="notification-popover-meta"><span>{meta.label}</span><time>{notificationTime(item.created_at)}</time></span><b>{item.title}</b><p>{item.body}</p></span>{!item.is_read && <i aria-label="Chưa đọc" />}</button>; }) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
+    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => { const meta = notificationKind(item.kind); return <button type="button" className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id} onClick={() => void openNotification(item)}><span className={'notification-popover-icon ' + meta.className}>{meta.icon}</span><span className="notification-popover-copy"><span className="notification-popover-meta"><span>{meta.label}</span><time>{notificationTime(item.created_at)}</time></span><b>{item.title}</b><p>{item.body}</p></span>{!item.is_read && <i aria-label="Chưa đọc" />}</button>; }) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
     <Divider /><Link href="/notifications" className="notification-popover-footer">Xem tất cả thông báo</Link>
   </div>;
   const accountPanel = <div className="account-popover">

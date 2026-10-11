@@ -1401,3 +1401,12 @@ def remove_push_token(req: PushTokenInput, user: models.User = Depends(require_r
 @app.patch('/api/notifications/read-all')
 def read_all_notifications(db: Session = Depends(get_db), user: models.User = Depends(user_or_401)):
     db.query(models.Notification).filter(models.Notification.user_id == user.id).update({'is_read': True}); db.commit(); return {'message': 'Đã đánh dấu tất cả đã đọc'}
+
+@app.patch('/api/notifications/{notification_id}/read')
+def read_notification(notification_id: uuid.UUID, db: Session = Depends(get_db), user: models.User = Depends(user_or_401)):
+    item = db.query(models.Notification).filter(models.Notification.id == notification_id, models.Notification.user_id == user.id).first()
+    if not item:
+        raise HTTPException(404, 'Không tìm thấy thông báo')
+    item.is_read = True
+    db.commit()
+    return {'id': str(item.id), 'is_read': True}
