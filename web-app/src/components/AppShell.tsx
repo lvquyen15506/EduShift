@@ -59,7 +59,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const notificationTarget = (item: Notification) => {
     if (!item.shift_id) return '/notifications';
     if (role === 'EMPLOYER') return '/candidates?shift_id=' + encodeURIComponent(item.shift_id);
-    return '/student/shifts?shift_id=' + encodeURIComponent(item.shift_id);
+    return '/student/shifts/' + encodeURIComponent(item.shift_id);
   };
   const markRead = async () => {
     try { await api('/api/notifications/read-all', { method: 'PATCH' }); setNotifications(items => items.map(item => ({ ...item, is_read: true }))); } catch { /* Keep actual state on API error. */ }
