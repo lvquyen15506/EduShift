@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 import hmac
+import httpx
 import json
 import os
 import re

@@ -1,5 +1,9 @@
 # Triển khai EduShift trên VPS với aaPanel và Nginx
 
+Tài liệu bắt đầu nhanh và chính sách seed/migration nằm tại
+[`docs/START_HERE.md`](../docs/START_HERE.md). Nếu VPS đã có dữ liệu, đọc mục
+“Cập nhật VPS đã có dữ liệu” trước khi chạy bất kỳ lệnh nào.
+
 Ứng dụng chạy bằng Docker Compose trong /opt/edushift. Giữ site root
 /www/wwwroot/edushift.site cho aaPanel/Nginx; không đặt .env chứa mật khẩu
 trong thư mục web. Nginx chuyển edushift.site tới web và
@@ -37,6 +41,13 @@ docker compose --env-file .env -f compose.prod.yml exec api python -m app.create
 ~~~
 
 Lệnh hỏi mật khẩu trực tiếp, không ghi mật khẩu vào lịch sử shell.
+
+Lệnh trên chỉ tạo admin khi email hoặc username chưa tồn tại; nó không reset
+database và không sửa các tài khoản đã có. Khi cập nhật một VPS đang chạy, hãy
+backup PostgreSQL trước, pull image rồi `up -d --remove-orphans`. Không chạy
+`docker compose down -v`, không xóa volume `postgres_data` và không gọi
+`python -m seed` trên production. API tự chạy migration chuyển tiếp idempotent
+khi khởi động.
 
 ## 3. aaPanel và Nginx
 

@@ -2,6 +2,12 @@
 
 EduShift gồm web Next.js, ứng dụng sinh viên Expo và API FastAPI.
 
+## Bắt đầu từ đâu
+
+Đọc [docs/START_HERE.md](docs/START_HERE.md) trước khi chạy local hoặc triển
+khai. Tài liệu giải thích cấu trúc service, seed data, biến môi trường, mobile,
+VPS mới và cách cập nhật VPS đã có dữ liệu mà không reset database.
+
 ## Làm việc với Git
 
 Phát triển trên `dev`. Tạo pull request từ `dev` vào `main` để phát hành.
@@ -77,7 +83,7 @@ Tạo hoặc sửa file `.env` ở **thư mục gốc repo**, cùng cấp với 
 
 ```env
 GEMINI_API_KEY=your_key_from_google_ai_studio
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
 Lấy key tại [Google AI Studio](https://aistudio.google.com/app/apikey). Sau khi lưu, chạy `docker compose up -d --force-recreate api` để container API nhận biến môi trường mới. Không đặt key vào `NEXT_PUBLIC_*` hoặc commit file `.env`. Khi chưa cấu hình key hoặc Gemini tạm lỗi, chat dùng câu trả lời từ dữ liệu công khai có sẵn.
