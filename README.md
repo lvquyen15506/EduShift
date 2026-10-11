@@ -70,3 +70,14 @@ chính sách riêng tư hiện là bản nháp; kênh hỗ trợ chính thức s
 cấu hình `NEXT_PUBLIC_SUPPORT_EMAIL` lúc build image web. Trước khi mở thanh
 toán thật cần chọn nhà cung cấp, tài khoản merchant, khóa và webhook HTTPS,
 đồng thời duyệt nội dung pháp lý và thông tin hỗ trợ.
+
+### Cấu hình Gemini cho chat
+
+Tạo hoặc sửa file `.env` ở **thư mục gốc repo**, cùng cấp với `docker-compose.yml` (không đặt trong `src`):
+
+```env
+GEMINI_API_KEY=your_key_from_google_ai_studio
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+Lấy key tại [Google AI Studio](https://aistudio.google.com/app/apikey). Sau khi lưu, chạy `docker compose up -d --force-recreate api` để container API nhận biến môi trường mới. Không đặt key vào `NEXT_PUBLIC_*` hoặc commit file `.env`. Khi chưa cấu hình key hoặc Gemini tạm lỗi, chat dùng câu trả lời từ dữ liệu công khai có sẵn.
