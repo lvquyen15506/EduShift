@@ -1135,6 +1135,17 @@ def _chat_sources(db: Session, message: str):
     return [item[1] for item in docs[:8]]
 
 def _local_chat_answer(message: str, sources: list[dict], is_support: bool):
+    lower = message.lower()
+    if any(term in lower for term in ['đăng ký', 'đăng kí', 'tạo tài khoản', 'tạo tk', 'hướng dẫn']) and not any(term in lower for term in ['đăng ca', 'ứng viên']):
+        return ('Bạn có thể đăng ký tài khoản EduShift theo các bước sau:\n'
+                '1. Chọn “Bắt đầu ngay” hoặc “Đăng ký” trên landing.\n'
+                '2. Chọn vai trò Sinh viên hoặc Doanh nghiệp, rồi nhập email, mật khẩu và thông tin cơ bản.\n'
+                '3. Kiểm tra email và nhập mã OTP để xác nhận tài khoản. Nếu chưa thấy, kiểm tra thư rác và dùng nút gửi lại mã sau thời gian chờ.\n'
+                '4. Sinh viên đăng nhập, hoàn thiện hồ sơ và nhập lịch học để tìm ca không trùng lịch. Doanh nghiệp hoàn thiện hồ sơ và chờ admin xác minh trước khi đăng ca.\n'
+                'Bạn đang muốn đăng ký tài khoản Sinh viên hay Doanh nghiệp?')
+    if any(term in lower for term in ['otp', 'mã xác nhận', 'quên mật khẩu', 'đặt lại mật khẩu']):
+        return ('Nếu chưa nhận được mã OTP, hãy kiểm tra thư rác, xác nhận email đã nhập đúng và dùng nút gửi lại mã sau thời gian chờ. '
+                'Nếu quên mật khẩu, mở Đăng nhập → Quên mật khẩu, nhập email và xác nhận OTP để đặt mật khẩu mới. Không chia sẻ mã OTP cho người khác.')
     shifts = [source for source in sources if source.get('type') == 'shift']
     if shifts:
         lines = ['Mình tìm thấy một số ca đang tuyển có thể phù hợp với câu hỏi của bạn:']
@@ -1144,6 +1155,10 @@ def _local_chat_answer(message: str, sources: list[dict], is_support: bool):
     if is_support:
         return 'Mình có thể hỗ trợ về tài khoản, hồ sơ, lịch học, tìm ca, ứng tuyển, nhận ca và thanh toán. Bạn mô tả vấn đề cụ thể hơn nhé.'
     return 'EduShift giúp sinh viên tìm ca part-time phù hợp lịch học và giúp doanh nghiệp tìm ứng viên. Bạn có thể hỏi về cách đăng ký, tìm ca hoặc công việc đang tuyển.'
+
+def _chat_is_guide_request(value: str):
+    lower = value.lower()
+    return any(term in lower for term in ['hướng dẫn', 'đăng ký', 'đăng kí', 'tạo tài khoản', 'tạo tk', 'otp', 'quên mật khẩu'])
 
 def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict]):
     api_key = os.getenv('GEMINI_API_KEY', '').strip()
@@ -1159,17 +1174,25 @@ def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict
         response = httpx.post(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', params={'key': api_key}, json={'systemInstruction': {'parts': [{'text': system}]}, 'contents': contents, 'generationConfig': {'temperature': 0.25, 'maxOutputTokens': 500}}, timeout=15)
         response.raise_for_status()
         data = response.json()
-        return ''.join(part.get('text', '') for part in data.get('candidates', [{}])[0].get('content', {}).get('parts', [])).strip() or None
+        answer = ''.join(part.get('text', '') for part in data.get('candidates', [{}])[0].get('content', {}).get('parts', [])).strip()
+        answer = answer.replace('**', '').replace('__', '').strip()
+        if not answer or answer.endswith(('*', '…', '...', ':')):
+            return None
+        return answer
     except (httpx.HTTPError, ValueError, KeyError, IndexError):
         return None
 
 @app.post('/api/chat')
 def chat(req: ChatRequest, authorization: Optional[str] = Header(default=None), db: Session = Depends(get_db)):
     user = current_user(authorization, db)
-    context = _chat_sources(db, req.message)
+    history_context = ' '.join(item.get('content', '') for item in req.history[-8:] if item.get('content'))
+    conversation_text = f'{history_context} {req.message}'
+    context = _chat_sources(db, conversation_text)
     answer = _gemini_chat(req.message, req.history, context)
+    if answer and _chat_is_guide_request(conversation_text) and len(answer) < 220:
+        answer = None
     mode = 'gemini' if answer else 'local'
-    return {'answer': answer or _local_chat_answer(req.message, context, bool(user)), 'mode': mode, 'authenticated': bool(user), 'sources': context}
+    return {'answer': answer or _local_chat_answer(conversation_text, context, bool(user)), 'mode': mode, 'authenticated': bool(user), 'sources': context}
 
 @app.post('/api/shifts', status_code=201)
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
