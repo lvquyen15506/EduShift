@@ -22,18 +22,10 @@ def schedule_available(start: datetime, end: datetime, schedules) -> bool:
     entries = list(schedules)
     if any(item.type in {'STUDY', 'BUSY', 'WORK'} and item.start_time < end and item.end_time > start for item in entries):
         return False
-    free = sorted((item.start_time, item.end_time) for item in entries if item.type == 'FREE')
-    if not free:
-        return True
-    covered_until = start
-    for free_start, free_end in free:
-        if free_start > covered_until:
-            break
-        if free_end > covered_until:
-            covered_until = free_end
-        if covered_until >= end:
-            return True
-    return False
+    # Availability is the default. FREE rows are informational only; students
+    # should not have to pre-fill every free interval before receiving a shift.
+    # Only declared study, busy, or already accepted work intervals can block it.
+    return True
 
 
 def match_student_shift(student, shift):

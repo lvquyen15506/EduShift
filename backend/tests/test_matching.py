@@ -25,9 +25,9 @@ def test_busy_overlap_blocks_but_touching_boundary_does_not():
     assert schedule_available(START, END, [entry(END, END + timedelta(hours=1), 'BUSY')])
 
 
-def test_free_windows_must_cover_whole_shift():
-    assert schedule_available(START, END, [entry(START, START + timedelta(hours=2), 'FREE'), entry(START + timedelta(hours=2), END, 'FREE')])
-    assert not schedule_available(START, END, [entry(START, END - timedelta(minutes=1), 'FREE')])
+def test_no_declared_schedule_and_free_rows_are_available_by_default():
+    assert schedule_available(START, END, [])
+    assert schedule_available(START, END, [entry(START, END - timedelta(minutes=1), 'FREE')])
     assert not schedule_available(START, END, [entry(START, END, 'FREE'), entry(START + timedelta(hours=1), START + timedelta(hours=2), 'STUDY')])
 
 
