@@ -8,6 +8,10 @@ EduShift gồm web Next.js, ứng dụng sinh viên Expo và API FastAPI.
 khai. Tài liệu giải thích cấu trúc service, seed data, biến môi trường, mobile,
 VPS mới và cách cập nhật VPS đã có dữ liệu mà không reset database.
 
+Hướng dẫn sử dụng theo vai trò nằm ở [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+Sổ tay kỹ thuật, API, RAG, kiểm thử và phát hành nằm ở
+[docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md).
+
 ## Làm việc với Git
 
 Phát triển trên `dev`. Tạo pull request từ `dev` vào `main` để phát hành.
