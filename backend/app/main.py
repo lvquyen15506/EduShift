@@ -720,11 +720,15 @@ def admin_settings(actor: models.User = Depends(require_role('ADMIN')), db: Sess
     return result
 
 class SystemSettingUpdate(BaseModel):
-    value: str = Field(max_length=10000)
+    value: str = Field(max_length=1_500_000)
 
 @app.put('/api/admin/settings/{key}')
 def update_system_setting(key: str, req: SystemSettingUpdate, actor: models.User = Depends(require_role('ADMIN')), db: Session = Depends(get_db)):
     if key not in DEFAULT_SYSTEM_SETTINGS: raise HTTPException(404, 'Không tìm thấy cấu hình')
+    if key == 'brand_logo_url' and req.value:
+        if req.value.startswith('data:') and not re.fullmatch(r'data:image/(jpeg|png|webp|svg\+xml);base64,[A-Za-z0-9+/=]+', req.value):
+            raise HTTPException(422, 'Logo phải là ảnh PNG, JPG, WEBP hoặc SVG hợp lệ')
+        if len(req.value) > 1_400_000: raise HTTPException(413, 'Logo không được vượt quá 1 MB')
     value, group_name, is_public = DEFAULT_SYSTEM_SETTINGS[key]
     row = db.query(models.SystemSetting).filter_by(key=key).with_for_update().first()
     if row is None:
