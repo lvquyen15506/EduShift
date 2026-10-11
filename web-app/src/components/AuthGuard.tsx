@@ -8,7 +8,7 @@ type Role = 'STUDENT' | 'EMPLOYER' | 'ADMIN';
 const home: Record<Role, string> = { STUDENT: '/student', EMPLOYER: '/dashboard', ADMIN: '/admin' };
 const publicPaths = ['/', '/login', '/register', '/forgot-password', '/pricing', '/support', '/terms', '/privacy'];
 function allowed(path: string, role: Role) {
-  if (path === '/profile') return true;
+  if (path === '/profile' || path.startsWith('/profiles/')) return role === 'STUDENT' || role === 'EMPLOYER';
   if (path.startsWith('/admin')) return role === 'ADMIN';
   if (path.startsWith('/student')) return role === 'STUDENT';
   if (path.startsWith('/dashboard') || path.startsWith('/candidates') || path.startsWith('/shifts/new')) return role === 'EMPLOYER';

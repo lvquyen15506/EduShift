@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 
 type Role = 'STUDENT' | 'EMPLOYER' | 'ADMIN';
 type User = { role: Role; username?: string; email?: string; avatar_data?: string | null; profile?: { full_name?: string; company_name?: string } };
-type Notification = { id: string; title: string; body: string; kind: string; is_read: boolean; created_at: string };
+type Notification = { id: string; shift_id?: string | null; title: string; body: string; kind: string; is_read: boolean; created_at: string };
 const navigation = {
   STUDENT: [
     { href: '/student', label: 'Tổng quan', icon: <DashboardOutlined /> },
@@ -56,13 +56,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const unread = notifications.filter(item => !item.is_read).length;
   const logout = () => { setMobileMenuOpen(false); localStorage.removeItem('user'); router.replace('/login'); };
   const isActive = (href: string) => pathname === href || (href === '/shifts' && pathname === '/shifts/new');
+  const notificationTarget = (item: Notification) => {
+    if (!item.shift_id) return '/notifications';
+    if (role === 'EMPLOYER') return '/candidates?shift_id=' + encodeURIComponent(item.shift_id);
+    return '/student/shifts?shift_id=' + encodeURIComponent(item.shift_id);
+  };
   const markRead = async () => {
     try { await api('/api/notifications/read-all', { method: 'PATCH' }); setNotifications(items => items.map(item => ({ ...item, is_read: true }))); } catch { /* Keep actual state on API error. */ }
   };
   const notificationPanel = <div className="notification-popover">
     <div className="notification-popover-head"><div><strong>Thông báo</strong><Badge count={unread} /></div><Button type="link" size="small" onClick={markRead}>Đánh dấu tất cả đã đọc</Button></div>
     <Divider />
-    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => { const meta = notificationKind(item.kind); return <div className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id}><span className={'notification-popover-icon ' + meta.className}>{meta.icon}</span><div className="notification-popover-copy"><div className="notification-popover-meta"><span>{meta.label}</span><time>{notificationTime(item.created_at)}</time></div><b>{item.title}</b><p>{item.body}</p></div>{!item.is_read && <i aria-label="Chưa đọc" />}</div>; }) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
+    <div className="notification-popover-list">{notifications.length ? notifications.slice(0, 4).map(item => { const meta = notificationKind(item.kind); return <button type="button" className={'notification-popover-item ' + (!item.is_read ? 'unread' : '')} key={item.id} onClick={() => router.push(notificationTarget(item))}><span className={'notification-popover-icon ' + meta.className}>{meta.icon}</span><span className="notification-popover-copy"><span className="notification-popover-meta"><span>{meta.label}</span><time>{notificationTime(item.created_at)}</time></span><b>{item.title}</b><p>{item.body}</p></span>{!item.is_read && <i aria-label="Chưa đọc" />}</button>; }) : <p className="empty-note">Chưa có thông báo mới.</p>}</div>
     <Divider /><Link href="/notifications" className="notification-popover-footer">Xem tất cả thông báo</Link>
   </div>;
   const accountPanel = <div className="account-popover">

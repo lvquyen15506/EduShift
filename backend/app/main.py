@@ -58,6 +58,9 @@ def migrate_schema():
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMP",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS cancellation_reason TEXT",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS cancellation_requested_by VARCHAR(20)",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMP",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind VARCHAR(30) DEFAULT 'INFO'",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS template_version INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE",
@@ -196,6 +199,13 @@ class InvitationCreate(BaseModel):
 
 class InvitationResponse(BaseModel):
     accept: bool
+
+class CancellationRequest(BaseModel):
+    reason: str = Field(min_length=5, max_length=1000)
+
+class LeaveDecision(BaseModel):
+    approve: bool
+    reason: Optional[str] = Field(default=None, max_length=1000)
 
 class ShiftStatusUpdate(BaseModel):
     status: str
@@ -339,7 +349,7 @@ def shift_dict(shift: models.JobShift):
     for key in ('start_time', 'end_time'):
         if data[key] is not None and data[key].tzinfo is None:
             data[key] = data[key].replace(tzinfo=timezone.utc)
-    return {**data, 'company_name': shift.employer.company_name, 'required_skills': [x for x in (shift.required_skills or '').split(',') if x], 'applicants': len(shift.applications)}
+    return {**data, 'employer_id': str(shift.employer_id), 'company_name': shift.employer.company_name, 'required_skills': [x for x in (shift.required_skills or '').split(',') if x], 'applicants': len(shift.applications)}
 
 def schedule_dict(item: models.Schedule):
     return {'id': item.id, 'title': item.title, 'type': item.type, 'source': item.source, 'application_id': item.application_id, 'shift_id': item.application.shift_id if item.application else None, 'start_time': item.start_time.replace(tzinfo=timezone.utc), 'end_time': item.end_time.replace(tzinfo=timezone.utc)}
@@ -814,7 +824,23 @@ def verify_employer(employer_id: uuid.UUID, req: VerificationUpdate, user: model
 @app.get('/api/student/applications')
 def student_applications(user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
     applications = db.query(models.Application).filter(models.Application.student_id == user.id).order_by(models.Application.applied_at.desc()).all()
-    return [{'id': str(a.id), 'shift_id': str(a.shift_id), 'title': a.shift.title, 'company_name': a.shift.employer.company_name, 'location': a.shift.location, 'start_time': a.shift.start_time.isoformat(), 'status': a.status, 'match_score': a.match_score, 'applied_at': a.applied_at.isoformat(), 'checked_in_at': a.checked_in_at, 'checked_out_at': a.checked_out_at, 'completed_at': a.completed_at} for a in applications]
+    return [{'id': str(a.id), 'shift_id': str(a.shift_id), 'title': a.shift.title, 'company_id': str(a.shift.employer_id), 'company_name': a.shift.employer.company_name, 'location': a.shift.location, 'start_time': a.shift.start_time.isoformat(), 'end_time': a.shift.end_time.isoformat(), 'status': a.status, 'match_score': a.match_score, 'applied_at': a.applied_at.isoformat(), 'checked_in_at': a.checked_in_at, 'checked_out_at': a.checked_out_at, 'completed_at': a.completed_at, 'cancellation_reason': a.cancellation_reason, 'cancellation_requested_by': a.cancellation_requested_by} for a in applications]
+
+@app.get('/api/students/{student_id}/profile')
+def student_public_profile(student_id: uuid.UUID, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    student = db.query(models.Student).filter(models.Student.user_id == student_id).first()
+    if not student: raise HTTPException(404, 'Không tìm thấy hồ sơ sinh viên')
+    applications = db.query(models.Application).filter(models.Application.student_id == student_id).order_by(models.Application.applied_at.desc()).all()
+    reviews = db.query(models.Review).join(models.Application).filter(models.Application.student_id == student_id, models.Review.reviewer_role == 'EMPLOYER').order_by(models.Review.created_at.desc()).all()
+    return {'id': str(student.user_id), 'name': student.full_name, 'university': student.university, 'major': student.major, 'skills': [x.strip() for x in (student.skills or '').split(',') if x.strip()], 'rating': student.average_rating, 'history': [{'id': str(a.id), 'shift_id': str(a.shift_id), 'title': a.shift.title, 'company_name': a.shift.employer.company_name, 'status': a.status, 'start_time': a.shift.start_time.isoformat()} for a in applications], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.isoformat(), 'shift_title': next((a.shift.title for a in applications if a.id == r.application_id), '')} for r in reviews]}
+
+@app.get('/api/employers/{employer_id}/profile')
+def employer_public_profile(employer_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    employer = db.query(models.Employer).filter(models.Employer.user_id == employer_id).first()
+    if not employer: raise HTTPException(404, 'Không tìm thấy hồ sơ doanh nghiệp')
+    shifts = db.query(models.JobShift).filter(models.JobShift.employer_id == employer_id).order_by(models.JobShift.start_time.desc()).all()
+    reviews = db.query(models.Review).join(models.Application).join(models.JobShift).filter(models.JobShift.employer_id == employer_id, models.Review.reviewer_role == 'STUDENT').order_by(models.Review.created_at.desc()).all()
+    return {'id': str(employer.user_id), 'name': employer.company_name, 'address': employer.address, 'phone': employer.phone, 'verified': employer.is_verified, 'rating': employer.average_rating, 'history': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'status': s.status, 'start_time': s.start_time.isoformat()} for s in shifts], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.isoformat()} for r in reviews]}
 
 @app.put('/api/student/location')
 def update_student_location(req: LocationUpdate, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
@@ -1159,7 +1185,7 @@ def shift_applications(shift_id: uuid.UUID, user: models.User = Depends(require_
         raise HTTPException(404, 'Không tìm thấy ca làm')
     applications = db.query(models.Application).filter(models.Application.shift_id == shift_id).order_by(models.Application.applied_at.desc()).all()
     reviewed_ids = {review.application_id for review in db.query(models.Review).filter(models.Review.reviewer_role == 'EMPLOYER', models.Review.application_id.in_([item.id for item in applications])).all()}
-    return [{'id': str(item.id), 'student_id': str(item.student_id), 'name': item.student.full_name, 'university': item.student.university, 'status': item.status, 'match_score': item.match_score, 'applied_at': item.applied_at.replace(tzinfo=timezone.utc).isoformat(), 'checked_in_at': item.checked_in_at, 'checked_out_at': item.checked_out_at, 'completed_at': item.completed_at, 'reviewed': item.id in reviewed_ids} for item in applications]
+    return [{'id': str(item.id), 'student_id': str(item.student_id), 'name': item.student.full_name, 'avatar_data': item.student.user.avatar_data if item.student.user else None, 'university': item.student.university, 'status': item.status, 'match_score': item.match_score, 'applied_at': item.applied_at.replace(tzinfo=timezone.utc).isoformat(), 'checked_in_at': item.checked_in_at, 'checked_out_at': item.checked_out_at, 'completed_at': item.completed_at, 'cancellation_reason': item.cancellation_reason, 'cancellation_requested_by': item.cancellation_requested_by, 'reviewed': item.id in reviewed_ids} for item in applications]
 
 @app.patch('/api/applications/{application_id}/check-in')
 def check_in(application_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
@@ -1261,6 +1287,61 @@ def reject_application(application_id: uuid.UUID, user: models.User = Depends(re
         raise HTTPException(409, 'Đơn không còn chờ duyệt')
     application.status = 'REJECTED'
     db.add(build_notification(db, user_id=application.student_id, shift_id=application.shift_id, title='Kết quả ứng tuyển', body=f'Đơn ứng tuyển ca {application.shift.title} chưa được chấp nhận.', kind='APPLICATION'))
+    db.commit()
+    return {'id': str(application.id), 'status': application.status}
+
+def _remove_shift_schedule(db: Session, application: models.Application):
+    db.query(models.Schedule).filter(models.Schedule.application_id == application.id).delete(synchronize_session=False)
+
+@app.post('/api/applications/{application_id}/cancel')
+def cancel_accepted_application(application_id: uuid.UUID, req: CancellationRequest, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).join(models.JobShift).filter(models.Application.id == application_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy ca đã nhận')
+    if application.status not in {'ACCEPTED', 'LEAVE_REQUESTED'} or application.checked_in_at:
+        raise HTTPException(409, 'Ca này không thể hủy')
+    application.status = 'CANCELLED'
+    application.cancellation_reason = req.reason.strip()
+    application.cancellation_requested_by = 'EMPLOYER'
+    application.cancellation_requested_at = datetime.utcnow()
+    _remove_shift_schedule(db, application)
+    if application.shift.status == 'FULL': application.shift.status = 'OPEN'
+    db.add(build_notification(db, user_id=application.student_id, shift_id=application.shift_id, title='Ca làm đã bị hủy', body=f'{user.employer_profile.company_name} đã hủy ca {application.shift.title}. Lý do: {application.cancellation_reason}', kind='APPLICATION'))
+    db.commit()
+    return {'id': str(application.id), 'status': application.status}
+
+@app.post('/api/applications/{application_id}/leave-request')
+def request_leave(application_id: uuid.UUID, req: CancellationRequest, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter_by(id=application_id, student_id=user.id).with_for_update().first()
+    if not application:
+        raise HTTPException(404, 'Không tìm thấy ca đã nhận')
+    if application.status != 'ACCEPTED' or application.checked_in_at:
+        raise HTTPException(409, 'Ca này không thể xin nghỉ')
+    application.status = 'LEAVE_REQUESTED'
+    application.cancellation_reason = req.reason.strip()
+    application.cancellation_requested_by = 'STUDENT'
+    application.cancellation_requested_at = datetime.utcnow()
+    db.add(build_notification(db, user_id=application.shift.employer_id, shift_id=application.shift_id, title='Sinh viên xin nghỉ ca', body=f'{user.student_profile.full_name} xin nghỉ ca {application.shift.title}. Lý do: {application.cancellation_reason}', kind='APPLICATION'))
+    db.commit()
+    return {'id': str(application.id), 'status': application.status}
+
+@app.patch('/api/applications/{application_id}/leave-request')
+def decide_leave(application_id: uuid.UUID, req: LeaveDecision, user: models.User = Depends(require_role('EMPLOYER')), db: Session = Depends(get_db)):
+    application = db.query(models.Application).join(models.JobShift).filter(models.Application.id == application_id, models.JobShift.employer_id == user.id).with_for_update().first()
+    if not application or application.status != 'LEAVE_REQUESTED':
+        raise HTTPException(404, 'Không tìm thấy yêu cầu xin nghỉ')
+    if req.approve:
+        application.status = 'CANCELLED'
+        _remove_shift_schedule(db, application)
+        if application.shift.status == 'FULL': application.shift.status = 'OPEN'
+        title, body = 'Yêu cầu xin nghỉ đã được duyệt', f'Yêu cầu xin nghỉ ca {application.shift.title} của bạn đã được duyệt.'
+    else:
+        application.status = 'ACCEPTED'
+        application.cancellation_reason = None
+        application.cancellation_requested_by = None
+        application.cancellation_requested_at = None
+        title, body = 'Yêu cầu xin nghỉ bị từ chối', f'Yêu cầu xin nghỉ ca {application.shift.title} bị từ chối.' + (f' Lý do: {req.reason.strip()}' if req.reason else '')
+    db.add(build_notification(db, user_id=application.student_id, shift_id=application.shift_id, title=title, body=body, kind='APPLICATION'))
     db.commit()
     return {'id': str(application.id), 'status': application.status}
 

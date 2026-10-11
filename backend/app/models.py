@@ -142,6 +142,9 @@ class Application(Base):
     checked_in_at = Column(DateTime, nullable=True)
     checked_out_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
+    cancellation_requested_by = Column(String(20), nullable=True)
+    cancellation_requested_at = Column(DateTime, nullable=True)
     student = relationship('Student', back_populates='applications')
     shift = relationship('JobShift', back_populates='applications')
 
