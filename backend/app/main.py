@@ -1113,7 +1113,8 @@ CHAT_KNOWLEDGE = [
 ]
 
 def _chat_tokens(value: str):
-    return {token for token in re.findall(r'[\wÀ-ỹ]{2,}', value.lower()) if token not in {'của', 'cho', 'với', 'mình', 'tôi', 'muốn', 'được', 'những', 'nào'}}
+    stopwords = {'của', 'cho', 'với', 'mình', 'tôi', 'muốn', 'được', 'những', 'nào', 'có', 'không', 'bạn', 'mình', 'ơi', 'là', 'và', 'thì', 'sao', 'gì', 'rất', 'đang', 'về'}
+    return {token for token in re.findall(r'[\wÀ-ỹ]{2,}', value.lower()) if token not in stopwords}
 
 def _chat_sources(db: Session, message: str):
     tokens = _chat_tokens(message)
@@ -1136,6 +1137,8 @@ def _chat_sources(db: Session, message: str):
 
 def _local_chat_answer(message: str, sources: list[dict], is_support: bool):
     lower = message.lower()
+    if any(term in lower for term in ['đẹp trai', 'xinh không', 'dễ thương không', 'ngoại hình']):
+        return 'Mình chưa nhìn thấy bạn nên không thể đánh giá ngoại hình, nhưng mình tin bạn có nét riêng rất cuốn hút. Mình có thể giúp bạn tìm ca làm phù hợp nếu bạn muốn nhé.'
     if any(term in lower for term in ['đăng ký', 'đăng kí', 'tạo tài khoản', 'tạo tk', 'hướng dẫn']) and not any(term in lower for term in ['đăng ca', 'ứng viên']):
         return ('Bạn có thể đăng ký tài khoản EduShift theo các bước sau:\n'
                 '1. Chọn “Bắt đầu ngay” hoặc “Đăng ký” trên landing.\n'
@@ -1166,7 +1169,9 @@ def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict
     model = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash').strip()
     prompt_context = json.dumps(context, ensure_ascii=False, default=str)
     system = ('Bạn là trợ lý EduShift. Trả lời bằng tiếng Việt, rõ ràng, thân thiện và ngắn gọn. '
-              'Chỉ dùng thông tin trong CONTEXT; nếu không đủ dữ liệu hãy nói chưa có thông tin và hướng người dùng đăng ký hoặc liên hệ hỗ trợ. '
+              'Với câu hỏi về sản phẩm, chỉ dùng thông tin trong CONTEXT; nếu không đủ dữ liệu hãy nói chưa có thông tin và hướng người dùng đăng ký hoặc liên hệ hỗ trợ. '
+              'Với lời chào hoặc trò chuyện đời thường không liên quan sản phẩm, hãy trả lời tự nhiên, lịch sự và không bịa thông tin về EduShift. '
+              'Không dùng dấu ** hoặc markdown chưa đóng; khi hướng dẫn thao tác hãy viết đủ các bước và không kết thúc giữa câu. '
               'Không tự bịa lương, địa chỉ, chính sách hay cam kết tuyển dụng. Khi có ca phù hợp, nêu đúng tên ca, doanh nghiệp và địa điểm.')
     contents = [{'role': 'user' if item.get('role') == 'user' else 'model', 'parts': [{'text': item.get('content', '')[:2000]}]} for item in history[-8:] if item.get('content')]
     contents.append({'role': 'user', 'parts': [{'text': f'CONTEXT:\n{prompt_context}\n\nCÂU HỎI:\n{message}'}]})
