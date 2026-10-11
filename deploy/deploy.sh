@@ -19,6 +19,19 @@ previous_tag="$(sed -n 's/^IMAGE_TAG=//p' .env | tail -1)"
 export IMAGE_TAG="$tag"
 compose=(docker compose --env-file .env -f compose.prod.yml)
 "${compose[@]}" config --quiet
+
+# Start the existing database and back it up before the new API can migrate it.
+"${compose[@]}" up -d --wait db
+install -d -m 700 backups
+backup_file="backups/edushift-before-${tag}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+if ! "${compose[@]}" exec -T db pg_dump -U edushift -d edushift -Fc > "$backup_file"; then
+  rm -f "$backup_file"
+  echo "Database backup failed; deployment stopped" >&2
+  exit 1
+fi
+chmod 600 "$backup_file"
+echo "Database backup created: $backup_file"
+
 "${compose[@]}" pull
 "${compose[@]}" up -d --remove-orphans
 

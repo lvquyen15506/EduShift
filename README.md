@@ -87,6 +87,8 @@ Tạo hoặc sửa file `.env` ở **thư mục gốc repo**, cùng cấp với 
 
 ```env
 GEMINI_API_KEY=your_key_from_google_ai_studio
+# Optional failover keys, separated by commas, semicolons, or new lines.
+GEMINI_API_KEYS=key_two,key_three
 GEMINI_MODEL=gemini-3.8-flash
 ```
 

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import secrets
+import time
 import uuid
 from typing import Optional
 
@@ -1103,6 +1104,7 @@ def public_shifts(
 
 CHAT_KNOWLEDGE = [
     ('EduShift là nền tảng kết nối sinh viên với ca làm part-time phù hợp lịch học. Sinh viên có thể tạo hồ sơ, nhập lịch học, tìm ca, ứng tuyển và theo dõi lịch nhận.', ['edushift', 'nền tảng', 'sinh viên', 'part-time']),
+    ('EduShift là website và ứng dụng kết nối sinh viên với doanh nghiệp nhỏ và các quán ăn, cửa hàng có nhu cầu tuyển người theo ca. Người dùng có thể đăng ký, tìm ca, xem địa điểm trên bản đồ, ứng tuyển và quản lý lịch làm.', ['web', 'website', 'ứng dụng', 'trang web', 'edushift là gì', 'doanh nghiệp nhỏ', 'quán ăn', 'cửa hàng']),
     ('Để đăng ký tài khoản sinh viên, mở nút Bắt đầu ngay hoặc trang Đăng ký, chọn vai trò Sinh viên, nhập email, mật khẩu và họ tên rồi gửi biểu mẫu. EduShift gửi mã OTP vào email; nhập mã trong thời hạn hiệu lực để hoàn tất tài khoản. Sau khi đăng nhập, mở Hồ sơ để bổ sung trường đại học, ngành học, kỹ năng và mở Lịch học để nhập thời khóa biểu. Doanh nghiệp cũng chọn Đăng ký, chọn vai trò Doanh nghiệp, nhập thông tin công ty và xác minh email; tài khoản cần quản trị viên xác minh trước khi đăng ca.', ['đăng ký', 'tạo tài khoản', 'tạo tk', 'đăng kí', 'otp', 'mã xác nhận', 'mật khẩu', 'email', 'sinh viên', 'doanh nghiệp']),
     ('Nếu chưa nhận được OTP, kiểm tra thư rác, chờ một chút rồi dùng nút gửi lại mã sau thời gian chờ. Nếu quên mật khẩu, mở Đăng nhập, chọn Quên mật khẩu, nhập email và xác nhận mã OTP để đặt mật khẩu mới. Không chia sẻ mã OTP hoặc mật khẩu cho người khác.', ['otp', 'mã otp', 'không nhận được mã', 'quên mật khẩu', 'đặt lại mật khẩu', 'thư rác']),
     ('Sau khi đăng nhập sinh viên, mở mục Tìm ca để xem các ca đang tuyển. Có thể mở chi tiết để xem thời gian, địa điểm, mức lương và số chỗ còn lại, sau đó chọn Ứng tuyển. Khi doanh nghiệp chấp nhận, ca được thêm vào lịch cá nhân; hãy kiểm tra lịch học và lịch làm trước khi nhận ca.', ['tìm ca', 'ứng tuyển', 'xem ca', 'chi tiết ca', 'nhận ca', 'lịch cá nhân']),
@@ -1137,6 +1139,11 @@ def _chat_sources(db: Session, message: str):
 
 def _local_chat_answer(message: str, sources: list[dict], is_support: bool):
     lower = message.lower()
+    if lower.strip(' !?.').strip() in {'hello', 'hi', 'xin chào', 'chào', 'chào bạn'}:
+        return 'Chào bạn! Mình là trợ lý EduShift. Bạn muốn tìm ca làm theo thời gian, địa điểm hay mức lương nào?'
+    if any(term in lower for term in ['đây là web gì', 'web gì', 'website gì', 'trang web nào', 'ứng dụng gì', 'edushift là gì']):
+        return ('Đây là EduShift, nền tảng kết nối sinh viên với các doanh nghiệp và quán ăn đang tuyển người theo ca. '
+                'Bạn có thể tạo hồ sơ, tìm ca phù hợp lịch học, xem địa điểm, ứng tuyển và theo dõi lịch nhận ca ngay trên nền tảng.')
     if any(term in lower for term in ['đẹp trai', 'xinh không', 'dễ thương không', 'ngoại hình']):
         return 'Mình chưa nhìn thấy bạn nên không thể đánh giá ngoại hình, nhưng mình tin bạn có nét riêng rất cuốn hút. Mình có thể giúp bạn tìm ca làm phù hợp nếu bạn muốn nhé.'
     if any(term in lower for term in ['đăng ký', 'đăng kí', 'tạo tài khoản', 'tạo tk', 'hướng dẫn']) and not any(term in lower for term in ['đăng ca', 'ứng viên']):
@@ -1155,6 +1162,9 @@ def _local_chat_answer(message: str, sources: list[dict], is_support: bool):
         lines.extend(f"• {item['title']} tại {item['company_name']} · {item['location']}" for item in shifts[:4])
         lines.append('Bạn mở chi tiết từng ca để xem giờ làm, mức lương và ứng tuyển nhé.')
         return '\n'.join(lines)
+    if any(term in lower for term in ['tư vấn', 'tìm việc', 'tìm ca', 'ca làm', 'công việc']):
+        return ('Mình có thể gợi ý ca theo lịch học, khu vực, kỹ năng và mức lương bạn mong muốn. '
+                'Bạn cho mình biết khu vực và khung giờ rảnh nhé; mình sẽ đối chiếu với các ca đang tuyển.')
     if is_support:
         return 'Mình có thể hỗ trợ về tài khoản, hồ sơ, lịch học, tìm ca, ứng tuyển, nhận ca và thanh toán. Bạn mô tả vấn đề cụ thể hơn nhé.'
     return 'EduShift giúp sinh viên tìm ca part-time phù hợp lịch học và giúp doanh nghiệp tìm ứng viên. Bạn có thể hỏi về cách đăng ký, tìm ca hoặc công việc đang tuyển.'
@@ -1164,8 +1174,14 @@ def _chat_is_guide_request(value: str):
     return any(term in lower for term in ['hướng dẫn', 'đăng ký', 'đăng kí', 'tạo tài khoản', 'tạo tk', 'otp', 'quên mật khẩu'])
 
 def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict]):
-    api_key = os.getenv('GEMINI_API_KEY', '').strip()
-    if not api_key: return None
+    configured = os.getenv('GEMINI_API_KEYS', '')
+    api_keys = [item.strip() for item in re.split(r'[,;\n]+', configured) if item.strip()]
+    if not api_keys:
+        legacy = os.getenv('GEMINI_API_KEY', '').strip()
+        if legacy:
+            api_keys = [legacy]
+    api_keys = list(dict.fromkeys(api_keys))
+    if not api_keys: return None
     model = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash').strip()
     prompt_context = json.dumps(context, ensure_ascii=False, default=str)
     system = ('Bạn là trợ lý EduShift. Trả lời bằng tiếng Việt, rõ ràng, thân thiện và ngắn gọn. '
@@ -1173,19 +1189,28 @@ def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict
               'Với lời chào hoặc trò chuyện đời thường không liên quan sản phẩm, hãy trả lời tự nhiên, lịch sự và không bịa thông tin về EduShift. '
               'Không dùng dấu ** hoặc markdown chưa đóng; khi hướng dẫn thao tác hãy viết đủ các bước và không kết thúc giữa câu. '
               'Không tự bịa lương, địa chỉ, chính sách hay cam kết tuyển dụng. Khi có ca phù hợp, nêu đúng tên ca, doanh nghiệp và địa điểm.')
-    contents = [{'role': 'user' if item.get('role') == 'user' else 'model', 'parts': [{'text': item.get('content', '')[:2000]}]} for item in history[-8:] if item.get('content')]
+    prior_history = history[-8:]
+    if prior_history and prior_history[-1].get('role') == 'user' and prior_history[-1].get('content', '').strip() == message.strip():
+        prior_history = prior_history[:-1]
+    contents = [{'role': 'user' if item.get('role') == 'user' else 'model', 'parts': [{'text': item.get('content', '')[:2000]}]} for item in prior_history if item.get('content')]
     contents.append({'role': 'user', 'parts': [{'text': f'CONTEXT:\n{prompt_context}\n\nCÂU HỎI:\n{message}'}]})
-    try:
-        response = httpx.post(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', params={'key': api_key}, json={'systemInstruction': {'parts': [{'text': system}]}, 'contents': contents, 'generationConfig': {'temperature': 0.25, 'maxOutputTokens': 500}}, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        answer = ''.join(part.get('text', '') for part in data.get('candidates', [{}])[0].get('content', {}).get('parts', [])).strip()
-        answer = answer.replace('**', '').replace('__', '').strip()
-        if not answer or answer.endswith(('*', '…', '...', ':')):
-            return None
-        return answer
-    except (httpx.HTTPError, ValueError, KeyError, IndexError):
-        return None
+    payload = {'systemInstruction': {'parts': [{'text': system}]}, 'contents': contents, 'generationConfig': {'temperature': 0.25, 'maxOutputTokens': 500}}
+    deadline = time.monotonic() + 12
+    for api_key in api_keys:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            response = httpx.post(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', params={'key': api_key}, json=payload, timeout=min(5, remaining))
+            response.raise_for_status()
+            data = response.json()
+            answer = ''.join(part.get('text', '') for part in data.get('candidates', [{}])[0].get('content', {}).get('parts', [])).strip()
+            answer = answer.replace('**', '').replace('__', '').strip()
+            if answer and not answer.endswith(('*', '…', '...', ':')):
+                return answer
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+            continue
+    return None
 
 @app.post('/api/chat')
 def chat(req: ChatRequest, authorization: Optional[str] = Header(default=None), db: Session = Depends(get_db)):
@@ -1197,7 +1222,8 @@ def chat(req: ChatRequest, authorization: Optional[str] = Header(default=None), 
     if answer and _chat_is_guide_request(conversation_text) and len(answer) < 220:
         answer = None
     mode = 'gemini' if answer else 'local'
-    return {'answer': answer or _local_chat_answer(conversation_text, context, bool(user)), 'mode': mode, 'authenticated': bool(user), 'sources': context}
+    fallback_message = req.message if len(_chat_tokens(req.message)) > 1 else conversation_text
+    return {'answer': answer or _local_chat_answer(fallback_message, context, bool(user)), 'mode': mode, 'authenticated': bool(user), 'sources': context}
 
 @app.post('/api/shifts', status_code=201)
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
