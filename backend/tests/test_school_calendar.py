@@ -1,5 +1,6 @@
 from datetime import datetime
 import httpx
+import pytest
 
 from app import school_calendar
 from app.school_calendar import parse_school_calendar
@@ -40,3 +41,24 @@ def test_school_fetch_uses_headers_required_by_calendar_api(monkeypatch):
     events = school_calendar.fetch_school_calendar('sample-user', 'sample-password')
     assert len(events) == 1
     assert events[0]['start_time'] == datetime(2026, 10, 12, 6)
+
+
+def test_timestamp_start_end_format_is_imported():
+    payload = {'data': [
+        {'name': 'Toán', 'start': '2026-10-12T06:00:00Z', 'end': '2026-10-12T10:00:00Z'},
+        {'name': 'Văn', 'start': '2026-10-13T13:00:00+07:00', 'end': '2026-10-13T15:00:00+07:00'},
+        {'title': 'Anh', 'start': '2026-10-14T08:00:00', 'end': '2026-10-14T10:00:00'},
+    ]}
+    events = parse_school_calendar(payload)
+    assert len(events) == 3
+    assert events[0]['start_time'] == datetime(2026, 10, 12, 6)
+    assert events[1]['start_time'] == datetime(2026, 10, 13, 6)
+    assert events[2]['start_time'] == datetime(2026, 10, 14, 1)
+
+
+def test_school_fetch_reports_soft_login_failure(monkeypatch):
+    original_client = httpx.Client
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={'status': False, 'textBody': 'Try another network'}))
+    monkeypatch.setattr(school_calendar.httpx, 'Client', lambda *args, **kwargs: original_client(*args, transport=transport, **kwargs))
+    with pytest.raises(school_calendar.SchoolCalendarError, match='từ chối đăng nhập'):
+        school_calendar.fetch_school_calendar('sample-user', 'sample-password')
