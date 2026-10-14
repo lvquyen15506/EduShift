@@ -14,11 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Bản thử nội bộ hoặc gửi iOS lên TestFlight'
+        description: 'Nền tảng và kiểu phát hành'
         required: true
         default: preview
         type: choice
-        options: [preview, testflight]
+        options: [preview, production, testflight]
 
 jobs:
   check:
@@ -74,6 +74,7 @@ jobs:
           mkdir -p build
           if [ "${{ matrix.platform }}" = android ]; then extension=apk; else extension=ipa; fi
           curl --fail --location --retry 3 "$url" --output "build/edushift.$extension"
+          file "build/edushift.$extension"
           unzip -t "build/edushift.$extension" > /dev/null
       - uses: actions/upload-artifact@v4
         with:
@@ -81,6 +82,47 @@ jobs:
           path: mobile-app/build/
           if-no-files-found: error
           retention-days: 14
+
+  production:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+    needs: check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile-app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PROJECT_ID: ${{ vars.EXPO_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile-app/package-lock.json
+      - run: npm ci
+      - name: Check EAS setup
+        run: |
+          test -n "$EXPO_TOKEN" || { echo 'Thiếu secret EXPO_TOKEN'; exit 1; }
+          test -n "$EXPO_PROJECT_ID" || { echo 'Thiếu variable EXPO_PROJECT_ID'; exit 1; }
+      - name: Build Android APK and iOS IPA
+        run: |
+          mkdir -p build
+          for platform in android ios; do
+            npx --yes eas-cli@latest build --platform "$platform" --profile production --non-interactive --json > "eas-$platform.json"
+            url=$(jq -r 'if type == "array" then .[0] else . end | .artifacts.buildUrl // .artifacts.applicationArchiveUrl // empty' "eas-$platform.json")
+            test -n "$url" || { echo "EAS không trả URL bản $platform"; exit 1; }
+            extension=ipa
+            [ "$platform" = android ] && extension=apk
+            curl --fail --location --retry 3 "$url" --output "build/edushift-production.$extension"
+            unzip -t "build/edushift-production.$extension" > /dev/null
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edushift-production-${{ github.run_number }}
+          path: mobile-app/build/
+          if-no-files-found: error
+          retention-days: 30
 
   testflight:
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'testflight'
