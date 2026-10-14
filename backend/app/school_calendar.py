@@ -66,17 +66,33 @@ def _school_times(value):
     return None
 
 
+def _timestamp(value):
+    """Parse API timestamps; naive timestamps are Vietnam local time."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=SCHOOL_TZ) if parsed.tzinfo is None else parsed
+
+
 def parse_school_calendar(payload):
     events = []
     seen = set()
     for item in _items(payload):
         title = next((str(item[key]).strip() for key in ('title', 'ten_mon', 'tenMonHoc', 'TenMonHoc', 'subject', 'subjectName', 'name', 'desc') if item.get(key)), '')
-        day = _school_date(item.get('date') or item.get('ngay') or item.get('ngay_hoc'))
-        hours = _school_times(item.get('timelearn') or item.get('tiet') or item.get('time'))
-        if not title or not day or not hours:
+        start_local = _timestamp(item.get('start') or item.get('startTime') or item.get('start_time') or item.get('begin'))
+        end_local = _timestamp(item.get('end') or item.get('endTime') or item.get('end_time') or item.get('finish'))
+        if not start_local or not end_local:
+            day = _school_date(item.get('date') or item.get('ngay') or item.get('ngay_hoc'))
+            hours = _school_times(item.get('timelearn') or item.get('tiet') or item.get('time'))
+            if not day or not hours:
+                continue
+            start_local = datetime.combine(day, hours[0], SCHOOL_TZ)
+            end_local = datetime.combine(day, hours[1], SCHOOL_TZ)
+        if not title:
             continue
-        start_local = datetime.combine(day, hours[0], SCHOOL_TZ)
-        end_local = datetime.combine(day, hours[1], SCHOOL_TZ)
         if end_local <= start_local:
             continue
         start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
@@ -98,6 +114,8 @@ def fetch_school_calendar(username: str, password: str):
             if login.status_code != 200:
                 raise SchoolCalendarError('Đăng nhập cổng lịch học thất bại')
             login_data = login.json()
+            if isinstance(login_data, dict) and login_data.get('status') is False:
+                raise SchoolCalendarError('Cổng lịch học từ chối đăng nhập; vui lòng kiểm tra tài khoản hoặc thử lại từ mạng khác')
             cookie = login.cookies.get('session_key')
             if not cookie and isinstance(login_data, dict):
                 cookie = str((login_data.get('UserData') or {}).get('cookie') or '').removeprefix('session_key=')
