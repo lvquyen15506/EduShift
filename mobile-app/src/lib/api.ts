@@ -1,6 +1,5 @@
-import { Platform } from 'react-native';
-
-const fallbackUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+// Release builds run on physical devices; local development can override this.
+const fallbackUrl = 'https://api.edushift.site';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || fallbackUrl).replace(/\/$/, '');
 
 export class ApiError extends Error {
