@@ -90,7 +90,15 @@ def test_accepted_shift_appears_in_calendar_and_blocks_overbooking(verified_regi
         assert any(item['title'] == 'Bạn đã được nhận vào ca làm' for item in notices)
         second_shift = call('POST', '/api/shifts', '_employer', {**shift_input, 'title': 'Ca trùng giờ'})
         assert second_shift.status_code == 201
-        assert call('POST', '/api/applications', '_student_a', {'shift_id': second_shift.json()['id']}).status_code == 409
+        second_id = second_shift.json()['id']
+        conflicting_detail = call('GET', '/api/shifts/' + second_id, '_student_a')
+        assert conflicting_detail.status_code == 200
+        assert conflicting_detail.json()['available'] is False
+        conflicting_application = call('POST', '/api/applications', '_student_a', {'shift_id': second_id})
+        assert conflicting_application.status_code == 201, conflicting_application.text
+        assert conflicting_application.json()['match_score'] == 0
+        assert call('POST', '/api/applications', '_student_a', {'shift_id': second_id}).status_code == 409
+        assert call('PATCH', '/api/applications/' + conflicting_application.json()['application_id'] + '/accept', '_employer').status_code == 409
     finally:
         session = SessionLocal()
         try:

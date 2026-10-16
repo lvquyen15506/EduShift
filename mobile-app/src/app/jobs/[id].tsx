@@ -34,7 +34,7 @@ export default function JobDetail() {
   if (loading && !shift) return <LoadingView />;
   if (!shift) return <Notice title="Không tải được ca làm" detail={error} onRetry={() => { void load(); }} />;
 
-  const canApply = shift.status === 'OPEN' && shift.available && !shift.applied && !shift.invitation_id;
+  const canApply = shift.status === 'OPEN' && !shift.applied && !shift.invitation_id;
   async function respond(accept: boolean) {
     if (!session || !shift?.invitation_id || busy) return;
     setBusy(true); setError('');
@@ -84,6 +84,7 @@ export default function JobDetail() {
     <View style={styles.card}><Text style={styles.section}>Mô tả công việc</Text><Text style={styles.body}>{shift.description || 'Doanh nghiệp chưa cập nhật mô tả.'}</Text>{shift.required_skills.length ? <><Text style={styles.section}>Kỹ năng cần có</Text><View style={styles.tags}>{shift.required_skills.map(skill => <Text style={styles.tag} key={skill}>{skill}</Text>)}</View></> : null}</View>
     <View style={styles.card}><Text style={styles.section}>Vì sao phù hợp?</Text>{shift.match_reasons.map(reason => <Text style={styles.reason} key={reason}>✓ {reason}</Text>)}</View>
     {shift.application_id && <View style={styles.card}><Text style={styles.section}>Chấm công và đánh giá</Text><Text style={styles.line}>{shift.application_status === 'COMPLETED' ? 'Ca đã được doanh nghiệp xác nhận hoàn thành.' : shift.checked_out_at ? 'Đã check-out, đang chờ doanh nghiệp xác nhận.' : shift.checked_in_at ? 'Đã check-in.' : 'Bạn đã nhận ca. Check-in từ 30 phút trước giờ bắt đầu.'}</Text>{shift.application_status === 'ACCEPTED' && !shift.checked_in_at && <ActionButton title="Check-in" onPress={() => { void attendance('check-in'); }} busy={busy} />}{shift.application_status === 'ACCEPTED' && shift.checked_in_at && !shift.checked_out_at && <ActionButton title="Check-out" onPress={() => { void attendance('check-out'); }} busy={busy} />}{shift.application_status === 'COMPLETED' && !shift.reviewed && <><Text style={styles.line}>Đánh giá doanh nghiệp (1–5 sao)</Text><View style={styles.tags}>{[1, 2, 3, 4, 5].map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`${value} sao`} onPress={() => setRating(value)}><Text style={styles.tag}>{value <= rating ? '★' : '☆'}</Text></Pressable>)}</View><TextInput style={styles.input} placeholder="Nhận xét (không bắt buộc)" value={comment} onChangeText={setComment} multiline maxLength={1000} /><ActionButton title="Gửi đánh giá" onPress={() => { void review(); }} busy={busy} /></>}{shift.reviewed && <Text style={styles.reason}>Bạn đã đánh giá ca này.</Text>}</View>}
+    {shift.available === false && !shift.applied && !shift.invitation_id ? <Text style={styles.warning}>Ca này trùng lịch đã khai báo. Bạn vẫn có thể gửi đơn; hãy cân nhắc lịch học, nghỉ ngơi và di chuyển.</Text> : null}
     {error ? <Text style={styles.error}>{error}</Text> : null}
     {shift.invitation_id ? <><ActionButton title="Nhận lời mời" onPress={() => { void respond(true); }} busy={busy} /><ActionButton title="Từ chối lời mời" secondary onPress={() => { void respond(false); }} disabled={busy} /></> : <ActionButton title={shift.applied ? 'Đã có đơn hoặc đã nhận ca' : canApply ? 'Ứng tuyển ngay' : 'Ca này chưa thể ứng tuyển'} onPress={apply} disabled={!canApply} busy={busy} />}
   </ScrollView>;
@@ -106,5 +107,6 @@ const styles = StyleSheet.create({
   tag: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7, backgroundColor: colors.blush, color: colors.magenta, fontSize: 12, fontWeight: '700' },
   reason: { color: colors.green, fontSize: 13, lineHeight: 20 },
   error: { color: colors.red, fontSize: 13, lineHeight: 20 },
+  warning: { color: colors.ink, backgroundColor: colors.blush, padding: 12, borderRadius: 9, fontSize: 13, lineHeight: 20 },
   input: { minHeight: 70, borderWidth: 1, borderColor: colors.line, borderRadius: 9, padding: 10, color: colors.ink },
 });
