@@ -1411,7 +1411,6 @@ def apply_shift(req: ApplicationCreate, user: models.User = Depends(user_or_401)
     if shift.status != 'OPEN' or shift.start_time <= datetime.utcnow(): raise HTTPException(409, 'Ca làm không còn nhận ứng tuyển')
     if db.query(models.Application).filter_by(student_id=user.id, shift_id=shift.id).first(): raise HTTPException(409, 'Bạn đã ứng tuyển ca này')
     match = match_student_shift(user.student_profile, shift)
-    if not match['available']: raise HTTPException(409, 'Ca làm không phù hợp lịch đã khai báo')
     application = models.Application(student_id=user.id, shift_id=shift.id, match_score=match['score'], match_reasons=', '.join(match['reasons']))
     db.add(application); db.add(build_notification(db, user_id=shift.employer_id, shift_id=shift.id, title='Ứng viên mới cho ca làm', body=f'{user.student_profile.full_name} vừa ứng tuyển {shift.title}.', kind='APPLICATION')); db.commit()
     return {'message': 'Ứng tuyển thành công', 'application_id': str(application.id), 'match_score': application.match_score}
