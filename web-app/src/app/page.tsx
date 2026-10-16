@@ -7,6 +7,7 @@ import PublicShifts from './public-shifts';
 import LandingPricing from './landing-pricing';
 import ChatWidget from '@/components/ChatWidget';
 import { BrandLogo } from '@/components/Branding';
+import LandingHeader from './landing-header';
 
 const steps = [
   { n: '01', title: 'Đồng bộ lịch học', body: 'Đưa thời khóa biểu vào EduShift để thấy rõ những khoảng thời gian bạn có thể đi làm.' },
@@ -18,11 +19,7 @@ export default async function Home() {
   await connection();
   return <main className="landing" id="top">
     <LandingMotion />
-    <header className="landing-header">
-      <Link href="/" className="landing-brand" aria-label="EduShift - Trang chủ"><BrandLogo /></Link>
-      <nav aria-label="Điều hướng chính"><a href="#loi-ich">Lợi ích</a><a href="#cach-hoat-dong">Cách hoạt động</a><a href="#doanh-nghiep">Doanh nghiệp</a><a href="#bang-gia">Bảng giá</a></nav>
-      <div className="landing-head-actions"><Link href="/login">Đăng nhập</Link><Link href="/register" className="landing-button landing-button-small">Bắt đầu ngay <span aria-hidden="true">↗</span></Link></div>
-    </header>
+    <LandingHeader />
 
     <section className="landing-hero">
       <div className="landing-hero-glow" aria-hidden="true" />
