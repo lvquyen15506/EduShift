@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/Branding';
 import OtpCodeInput from '@/components/OtpCodeInput';
 import styles from '../register/register.module.css';
 
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
   }
 
   return <main className="auth-page"><section className={styles.card} aria-labelledby="reset-title">
-    <Link href="/" className={styles.brand}><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span></span></Link>
+    <Link href="/" className={styles.brand} aria-label="EduShift"><BrandLogo /></Link>
     <header className={styles.header}><span className={styles.eyebrow}>BẢO MẬT TÀI KHOẢN</span><h1 id="reset-title">Quên mật khẩu</h1>
       <p>{stage === 'request' ? 'Nhập email đã đăng ký để nhận mã xác nhận.' : stage === 'confirm' ? `Nhập mã đã gửi đến ${email}.` : 'Mật khẩu của bạn đã được cập nhật.'}</p></header>
     {notice && <div className={styles.notice} role="status">{notice}</div>}

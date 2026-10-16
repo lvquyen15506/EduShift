@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Redirect, router } from 'expo-router';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActionButton, LoadingView } from '../components/Ui';
-import { errorMessage } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { useSession } from '../lib/session';
 import { colors } from '../theme';
 
@@ -13,6 +13,15 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    api<{ brand_logo_url?: string }>('/api/public/settings').then(settings => {
+      const value = settings.brand_logo_url;
+      if (active && value && /^(?:https?:\/\/|data:image\/(?:jpeg|png|webp);base64,)/i.test(value)) setLogoUrl(value);
+    }).catch(() => { /* Keep the bundled logo when offline. */ });
+    return () => { active = false; };
+  }, []);
   if (loading) return <LoadingView />;
   if (session) return <Redirect href="/(tabs)/jobs" />;
 
@@ -28,7 +37,7 @@ export default function Login() {
 
   return <SafeAreaView style={styles.safe}><KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.brand}><Text style={styles.logo}>E</Text><Text style={styles.name}>Edu<Text style={styles.nameAccent}>Shift</Text></Text></View>
+      <View style={styles.brand}><Image source={logoUrl ? { uri: logoUrl } : require('../../assets/icon.png')} style={styles.logo} accessibilityLabel="Logo EduShift" /></View>
       <Text style={styles.title}>Chào mừng trở lại</Text>
       <Text style={styles.subtitle}>Đăng nhập để xem ca phù hợp với lịch học của bạn.</Text>
       <View style={styles.card}>
@@ -49,10 +58,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   fill: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 14 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
-  logo: { width: 40, height: 40, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.magenta, color: '#fff', textAlign: 'center', textAlignVertical: 'center', fontSize: 24, fontWeight: '800' },
-  name: { color: colors.ink, fontSize: 24, fontWeight: '800' },
-  nameAccent: { color: colors.magenta },
+  brand: { alignItems: 'center', marginBottom: 12 },
+  logo: { width: 132, height: 132, borderRadius: 66 },
   title: { color: colors.ink, fontSize: 29, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: 10 },
   card: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 20, gap: 10 },
