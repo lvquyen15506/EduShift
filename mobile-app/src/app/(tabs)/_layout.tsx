@@ -1,18 +1,17 @@
 import { Redirect, Tabs } from 'expo-router';
-import { Pressable, Text } from 'react-native';
+import { Text } from 'react-native';
 import { LoadingView } from '../../components/Ui';
 import { useSession } from '../../lib/session';
 import { colors } from '../../theme';
 
 export default function TabsLayout() {
-  const { session, loading, signOut } = useSession();
+  const { session, loading } = useSession();
   if (loading) return <LoadingView />;
   if (!session) return <Redirect href="/login" />;
   return <Tabs screenOptions={{
     headerStyle: { backgroundColor: '#fff' },
     headerTitleStyle: { color: colors.ink, fontWeight: '700' },
     headerShadowVisible: false,
-    headerRight: () => <Pressable accessibilityRole="button" onPress={() => { void signOut(); }} style={{ paddingHorizontal: 16, paddingVertical: 8 }}><Text style={{ color: colors.magenta, fontWeight: '700' }}>Thoát</Text></Pressable>,
     tabBarActiveTintColor: colors.magenta,
     tabBarInactiveTintColor: colors.muted,
     tabBarStyle: { backgroundColor: '#fff', borderTopColor: colors.line, height: 64, paddingBottom: 8 },
