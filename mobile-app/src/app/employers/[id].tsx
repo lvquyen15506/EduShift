@@ -53,6 +53,13 @@ export default function EmployerProfileScreen() {
       <Text style={styles.muted}>Theo dõi để nhận thông báo khi doanh nghiệp đăng ca mới, kể cả khi ca hiện tại trùng lịch.</Text>
     </View>
     {error ? <Text style={styles.error}>{error}</Text> : null}
+    <View style={styles.card}><Text style={styles.section}>Ca đang tuyển</Text>
+      {profile.open_shifts?.length ? profile.open_shifts.map(item => <Pressable key={item.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/jobs/[id]', params: { id: item.id } })} style={styles.row}>
+        <Text style={styles.rowTitle}>{item.title}</Text>
+        <Text style={styles.muted}>{item.location} · {new Date(item.start_time).toLocaleString('vi-VN')} – {new Date(item.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</Text>
+        <Text style={styles.link}>{Number(item.hourly_rate || 0).toLocaleString('vi-VN')} ₫/giờ · Xem chi tiết →</Text>
+      </Pressable>) : <Text style={styles.muted}>Hiện chưa có ca đang tuyển.</Text>}
+    </View>
     <View style={styles.card}><Text style={styles.section}>Các ca đã đăng</Text>
       {profile.history.length ? profile.history.map(item => <Pressable key={item.id} accessibilityRole={item.status === 'OPEN' ? 'button' : undefined} disabled={item.status !== 'OPEN'} onPress={() => router.push({ pathname: '/jobs/[id]', params: { id: item.id } })} style={styles.row}>
         <Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.muted}>{item.location} · {new Date(item.start_time).toLocaleString('vi-VN')}</Text><Text style={styles.link}>{item.status === 'OPEN' ? 'Đang tuyển · Xem ca →' : item.status === 'FULL' ? 'Đã đủ người' : 'Đã đóng'}</Text>

@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import LandingMotion from './landing-motion';
 import LandingSlider from './landing-slider';
 import PublicShifts from './public-shifts';
@@ -13,7 +14,8 @@ const steps = [
   { n: '03', title: 'Nhận ca, lên lịch', body: 'Khi doanh nghiệp chấp nhận, ca làm tự xuất hiện trên lịch cá nhân của bạn.' },
 ];
 
-export default function Home() {
+export default async function Home() {
+  await connection();
   return <main className="landing" id="top">
     <LandingMotion />
     <header className="landing-header">

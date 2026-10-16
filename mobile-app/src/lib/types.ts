@@ -36,6 +36,7 @@ export type EmployerProfile = {
   verified: boolean;
   rating: number | null;
   following: boolean;
+  open_shifts?: { id: string; title: string; location: string; start_time: string; end_time: string; hourly_rate: number | null }[];
   history: { id: string; title: string; location: string; status: string; start_time: string }[];
   reviews: { rating: number; comment?: string; created_at: string }[];
 };

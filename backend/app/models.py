@@ -19,6 +19,17 @@ class User(Base):
     student_profile = relationship('Student', back_populates='user', uselist=False, cascade='all, delete-orphan')
     employer_profile = relationship('Employer', back_populates='user', uselist=False, cascade='all, delete-orphan')
     notifications = relationship('Notification', back_populates='user', cascade='all, delete-orphan')
+    chat_messages = relationship('ChatMessage', back_populates='user', cascade='all, delete-orphan')
+
+
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    role = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user = relationship('User', back_populates='chat_messages')
 
 class Student(Base):
     __tablename__ = 'students'
