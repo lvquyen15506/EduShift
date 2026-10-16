@@ -40,7 +40,7 @@ jobs:
       - run: npx expo export --platform android --output-dir dist
 
   preview:
-    if: (github.event_name == 'workflow_dispatch' && inputs.target == 'preview') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.EXPO_BUILD_READY == 'true')
+    if: (github.event_name == 'workflow_dispatch' && inputs.target == 'preview') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: check
     runs-on: ubuntu-latest
     strategy:
