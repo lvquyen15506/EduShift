@@ -46,6 +46,12 @@ class Employer(Base):
     user = relationship('User', back_populates='employer_profile')
     shifts = relationship('JobShift', back_populates='employer', cascade='all, delete-orphan')
 
+class EmployerFollow(Base):
+    __tablename__ = 'employer_follows'
+    student_id = Column(UUID(as_uuid=True), ForeignKey('students.user_id', ondelete='CASCADE'), primary_key=True)
+    employer_id = Column(UUID(as_uuid=True), ForeignKey('employers.user_id', ondelete='CASCADE'), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 
 
 class EmployerPlan(Base):

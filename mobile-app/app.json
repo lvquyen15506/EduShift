@@ -31,6 +31,7 @@
       "expo-router",
       "expo-secure-store",
       "expo-notifications",
+      "expo-font",
       [
         "expo-image-picker",
         {

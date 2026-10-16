@@ -18,9 +18,12 @@ function ShiftCard({ shift }: { shift: Shift }) {
   </Pressable>;
 }
 
+type FollowedEmployer = { id: string; name: string; rating: number | null };
+
 export default function Jobs() {
   const { session } = useSession();
   const [data, setData] = useState<StudentDashboard | null>(null);
+  const [followed, setFollowed] = useState<FollowedEmployer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +33,8 @@ export default function Jobs() {
     else setLoading(true);
     try {
       const next = await api<StudentDashboard>('/api/student/dashboard', { token: session.access_token });
+      const companies = await api<FollowedEmployer[]>('/api/student/followed-employers', { token: session.access_token }).catch(() => []);
+      setFollowed(companies);
       setData(next); setError('');
     } catch (cause) { setError(errorMessage(cause)); }
     finally { setLoading(false); setRefreshing(false); }
@@ -45,7 +50,7 @@ export default function Jobs() {
     renderItem={({ item }) => <ShiftCard shift={item} />}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void load(true); }} tintColor={colors.magenta} />}
     contentContainerStyle={styles.content}
-    ListHeaderComponent={<View><Text style={styles.eyebrow}>EDUMATCH CHO SINH VIÊN</Text><Text style={styles.heading}>Việc làm hợp lịch</Text><Text style={styles.subtitle}>Các ca không trùng lịch học, xếp theo Match Score của bạn.</Text><View style={styles.stats}><View><Text style={styles.statValue}>{data?.stats.available_shifts ?? 0}</Text><Text style={styles.statLabel}>Ca phù hợp</Text></View><View><Text style={styles.statValue}>{data?.stats.pending_applications ?? 0}</Text><Text style={styles.statLabel}>Đang chờ</Text></View><View><Text style={styles.statValue}>{data?.stats.accepted_applications ?? 0}</Text><Text style={styles.statLabel}>Đã nhận</Text></View></View>{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.section}>Gợi ý cho bạn</Text></View>}
+    ListHeaderComponent={<View><Text style={styles.eyebrow}>EDUMATCH CHO SINH VIÊN</Text><Text style={styles.heading}>Việc làm hợp lịch</Text><Text style={styles.subtitle}>Các ca không trùng lịch học, xếp theo Match Score của bạn.</Text><View style={styles.stats}><View><Text style={styles.statValue}>{data?.stats.available_shifts ?? 0}</Text><Text style={styles.statLabel}>Ca phù hợp</Text></View><View><Text style={styles.statValue}>{data?.stats.pending_applications ?? 0}</Text><Text style={styles.statLabel}>Đang chờ</Text></View><View><Text style={styles.statValue}>{data?.stats.accepted_applications ?? 0}</Text><Text style={styles.statLabel}>Đã nhận</Text></View></View>{followed.length ? <><Text style={styles.section}>Doanh nghiệp đang theo dõi</Text>{followed.map(company => <Pressable key={company.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/employers/[id]', params: { id: company.id } })} style={styles.followed}><Text style={styles.company}>{company.name}</Text><Text style={styles.meta}>★ {company.rating == null ? 'Chưa có đánh giá' : Number(company.rating).toFixed(1) + '/5'} · Xem hồ sơ →</Text></Pressable>)}</> : null}{error ? <Text style={styles.error}>{error}</Text> : null}<Text style={styles.section}>Gợi ý cho bạn</Text></View>}
     ListEmptyComponent={<Notice title="Chưa có ca phù hợp" detail="Hãy cập nhật lịch học hoặc kéo xuống để tải lại khi có ca mới." />}
   />;
 }
@@ -61,6 +66,7 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.muted, fontSize: 11, textAlign: 'center' },
   error: { marginTop: 12, color: colors.red, fontSize: 13 },
   section: { marginTop: 26, marginBottom: 12, color: colors.ink, fontSize: 18, fontWeight: '800' },
+  followed: { marginBottom: 8, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', gap: 5 },
   card: { marginBottom: 12, padding: 17, borderRadius: 16, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', gap: 7 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   company: { flex: 1, color: colors.magenta, fontSize: 12, fontWeight: '800' },

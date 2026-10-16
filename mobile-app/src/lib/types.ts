@@ -11,6 +11,7 @@ export type ScheduleItem = {
 
 export type Shift = {
   id: string;
+  employer_id: string;
   title: string;
   description: string;
   company_name: string;
@@ -25,6 +26,18 @@ export type Shift = {
   status: string;
   applicants: number;
   match_score?: number;
+};
+
+export type EmployerProfile = {
+  id: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  verified: boolean;
+  rating: number | null;
+  following: boolean;
+  history: { id: string; title: string; location: string; status: string; start_time: string }[];
+  reviews: { rating: number; comment?: string; created_at: string }[];
 };
 
 export type ShiftDetail = Shift & {

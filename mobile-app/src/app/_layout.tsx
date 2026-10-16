@@ -22,6 +22,7 @@ export default function RootLayout() {
       <Stack.Screen name="register" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="jobs/[id]" options={{ headerShown: true, title: 'Chi tiết ca làm', headerTintColor: colors.magenta, headerShadowVisible: false }} />
+      <Stack.Screen name="employers/[id]" options={{ headerShown: true, title: 'Hồ sơ doanh nghiệp', headerTintColor: colors.magenta, headerShadowVisible: false }} />
     </Stack>
   </AuthProvider></SafeAreaProvider>;
 }

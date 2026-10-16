@@ -14,6 +14,7 @@ const navigation = {
   STUDENT: [
     { href: '/student', label: 'Tổng quan', icon: <DashboardOutlined /> },
     { href: '/student/shifts', label: 'Tìm ca làm', icon: <SearchOutlined /> },
+    { href: '/student/following', label: 'Đang theo dõi', icon: <TeamOutlined /> },
     { href: '/student/schedule', label: 'Lịch học', icon: <CalendarOutlined /> },
   ],
   EMPLOYER: [
@@ -33,7 +34,7 @@ const navigation = {
 };
 const home = { STUDENT: '/student', EMPLOYER: '/dashboard', ADMIN: '/admin' };
 function notificationTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-const notificationMeta: Record<string, { label: string; className: string; icon: React.ReactNode }> = { MATCH: { label: 'CA PHÙ HỢP', className: 'pink', icon: <BellOutlined /> }, APPLICATION: { label: 'ỨNG TUYỂN', className: 'green', icon: <TeamOutlined /> }, INVITATION: { label: 'LỜI MỜI', className: 'purple', icon: <CheckCircleOutlined /> }, SUCCESS: { label: 'HOÀN TẤT', className: 'green', icon: <CheckCircleOutlined /> }, SHIFT: { label: 'CA LÀM', className: 'yellow', icon: <ClockCircleOutlined /> } };
+const notificationMeta: Record<string, { label: string; className: string; icon: React.ReactNode }> = { MATCH: { label: 'CA PHÙ HỢP', className: 'pink', icon: <BellOutlined /> }, FOLLOWED_EMPLOYER: { label: 'DOANH NGHIỆP THEO DÕI', className: 'pink', icon: <BellOutlined /> }, APPLICATION: { label: 'ỨNG TUYỂN', className: 'green', icon: <TeamOutlined /> }, INVITATION: { label: 'LỜI MỜI', className: 'purple', icon: <CheckCircleOutlined /> }, SUCCESS: { label: 'HOÀN TẤT', className: 'green', icon: <CheckCircleOutlined /> }, SHIFT: { label: 'CA LÀM', className: 'yellow', icon: <ClockCircleOutlined /> } };
 function notificationKind(kind: string) { return notificationMeta[kind] || { label: 'CẬP NHẬT', className: 'pink', icon: <BellOutlined /> }; }
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname(); const router = useRouter();

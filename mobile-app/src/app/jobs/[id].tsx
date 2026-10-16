@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Redirect, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton, LoadingView, Notice } from '../../components/Ui';
 import { api, errorMessage } from '../../lib/api';
@@ -78,7 +78,7 @@ export default function JobDetail() {
   }
 
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-    <View style={styles.hero}><Text style={styles.company}>{shift.company_name}</Text><Text style={styles.title}>{shift.title}</Text><Text style={styles.location}>⌖ {shift.location}</Text><View style={styles.score}><Text style={styles.scoreText}>{shift.match_score}% phù hợp với bạn</Text></View></View>
+    <View style={styles.hero}><Pressable accessibilityRole="button" accessibilityLabel={`Xem hồ sơ ${shift.company_name}`} onPress={() => router.push({ pathname: '/employers/[id]', params: { id: shift.employer_id } })}><Text style={styles.company}>{shift.company_name} · Xem hồ sơ →</Text></Pressable><Text style={styles.title}>{shift.title}</Text><Text style={styles.location}>⌖ {shift.location}</Text><View style={styles.score}><Text style={styles.scoreText}>{shift.match_score}% phù hợp với bạn</Text></View></View>
     <View style={styles.card}><Text style={styles.section}>Thông tin ca làm</Text><Text style={styles.line}>◷ {new Date(shift.start_time).toLocaleString('vi-VN', { dateStyle: 'full', timeStyle: 'short' })}</Text><Text style={styles.line}>Kết thúc: {new Date(shift.end_time).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' })}</Text><Text style={styles.line}>Thu nhập: {Number(shift.hourly_rate || 0).toLocaleString('vi-VN')} đ/giờ</Text><Text style={styles.line}>Cần tuyển: {shift.required_workers} người</Text></View>
     <View style={styles.card}><Text style={styles.section}>Địa điểm làm việc</Text><OsmLocationMap location={shift.location} latitude={shift.latitude} longitude={shift.longitude} /></View>
     <View style={styles.card}><Text style={styles.section}>Mô tả công việc</Text><Text style={styles.body}>{shift.description || 'Doanh nghiệp chưa cập nhật mô tả.'}</Text>{shift.required_skills.length ? <><Text style={styles.section}>Kỹ năng cần có</Text><View style={styles.tags}>{shift.required_skills.map(skill => <Text style={styles.tag} key={skill}>{skill}</Text>)}</View></> : null}</View>

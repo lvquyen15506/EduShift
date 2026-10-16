@@ -12,7 +12,7 @@ type StudentAccount = {
   username: string | null;
   email: string | null;
   avatar_data: string | null;
-  profile: { full_name: string; phone: string | null; university: string | null; major: string | null; skills: string | null; latitude: number | null; longitude: number | null };
+  profile: { full_name: string; phone: string | null; university: string | null; major: string | null; skills: string | null; latitude: number | null; longitude: number | null; average_rating: number | null };
 };
 type Field = 'full_name' | 'phone' | 'university' | 'major' | 'skills' | 'email';
 const labels: [Field, string][] = [
@@ -86,7 +86,7 @@ export default function Profile() {
   if (!account) return <Notice title="Không tải được hồ sơ" detail={error} onRetry={() => { void load(); }} />;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.eyebrow}>TÀI KHOẢN SINH VIÊN</Text><Text style={styles.heading}>Hồ sơ của tôi</Text>
-    <View style={styles.avatarBox}>{account.avatar_data ? <Image source={{ uri: account.avatar_data }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.initial}>{account.profile.full_name.trim().slice(0, 1).toUpperCase()}</Text></View>}<Text style={styles.username}>{account.username || account.email}</Text><ActionButton title="Đổi ảnh đại diện" secondary onPress={() => { void chooseAvatar(); }} busy={busy} /></View>
+    <View style={styles.avatarBox}>{account.avatar_data ? <Image source={{ uri: account.avatar_data }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={styles.initial}>{account.profile.full_name.trim().slice(0, 1).toUpperCase()}</Text></View>}<Text style={styles.username}>{account.username || account.email}</Text><Text style={styles.rating}>★ {account.profile.average_rating == null ? 'Chưa có đánh giá' : Number(account.profile.average_rating).toFixed(1) + '/5 từ doanh nghiệp'}</Text><ActionButton title="Đổi ảnh đại diện" secondary onPress={() => { void chooseAvatar(); }} busy={busy} /></View>
     <View style={styles.card}>{labels.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={fields[key]} onChangeText={value => setFields(current => ({ ...current, [key]: value }))} autoCapitalize={key === 'email' ? 'none' : 'sentences'} keyboardType={key === 'email' ? 'email-address' : key === 'phone' ? 'phone-pad' : 'default'} /></View>)}<Text style={styles.label}>Vị trí gần đúng (tùy chọn)</Text><Text style={styles.username}>Chỉ dùng để ước tính điểm khoảng cách. Doanh nghiệp không thấy tọa độ của bạn. Có thể xóa bằng cách để trống cả hai ô.</Text><TextInput style={styles.input} value={latitude} onChangeText={setLatitude} keyboardType="numbers-and-punctuation" placeholder="Vĩ độ, ví dụ 21.0285" /><TextInput style={styles.input} value={longitude} onChangeText={setLongitude} keyboardType="numbers-and-punctuation" placeholder="Kinh độ, ví dụ 105.8542" />
       {error ? <Text style={styles.error}>{error}</Text> : null}{success ? <Text style={styles.success}>{success}</Text> : null}<ActionButton title="Lưu hồ sơ" onPress={() => { void save(); }} busy={busy} /></View>
     <ActionButton title="Đăng xuất" secondary onPress={() => { void signOut(); }} />
@@ -100,6 +100,7 @@ const styles = StyleSheet.create({
   avatarBox: { alignItems: 'center', gap: 10, padding: 20, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: colors.line },
   avatar: { width: 92, height: 92, borderRadius: 46 }, avatarFallback: { width: 92, height: 92, borderRadius: 46, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' },
   initial: { color: colors.magenta, fontSize: 34, fontWeight: '800' }, username: { color: colors.muted, fontSize: 13 },
+  rating: { color: colors.magenta, fontSize: 14, fontWeight: '800' },
   card: { padding: 18, gap: 13, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: colors.line },
   label: { color: colors.ink, fontWeight: '700', fontSize: 12, marginBottom: 6 }, input: { minHeight: 45, borderWidth: 1, borderColor: colors.line, borderRadius: 9, paddingHorizontal: 12, color: colors.ink },
   error: { color: colors.red, fontSize: 13 }, success: { color: colors.green, fontSize: 13 },

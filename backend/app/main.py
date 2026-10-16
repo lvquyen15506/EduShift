@@ -42,6 +42,7 @@ def migrate_schema():
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS latitude FLOAT",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS longitude FLOAT",
         "ALTER TABLE employers ADD COLUMN IF NOT EXISTS average_rating FLOAT",
+        "CREATE TABLE IF NOT EXISTS employer_follows (student_id UUID NOT NULL REFERENCES students(user_id) ON DELETE CASCADE, employer_id UUID NOT NULL REFERENCES employers(user_id) ON DELETE CASCADE, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (student_id, employer_id))",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
@@ -101,7 +102,7 @@ def migrate_schema():
         "UPDATE system_settings SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL",
         "INSERT INTO system_settings (key, value, group_name, is_public) VALUES ('brand_name', 'EduShift', 'branding', TRUE), ('brand_tagline', 'Đúng người, đúng ca', 'branding', TRUE), ('brand_logo_url', '', 'branding', TRUE), ('brand_primary_color', '#B10E6B', 'branding', TRUE), ('seo_title', 'EduShift · Đúng người, đúng ca', 'seo', TRUE), ('seo_description', 'Nền tảng kết nối việc làm part-time theo lịch học.', 'seo', TRUE), ('seo_keywords', 'việc làm part-time, sinh viên, ca làm, EduShift', 'seo', TRUE), ('seo_og_image', '', 'seo', TRUE), ('landing_hero_title', 'Tìm đúng người. Nhận đúng ca.', 'landing', TRUE), ('landing_hero_description', 'Kết nối sinh viên với các ca làm phù hợp lịch học.', 'landing', TRUE), ('landing_maintenance', 'false', 'landing', TRUE) ON CONFLICT (key) DO NOTHING",
         "CREATE TABLE IF NOT EXISTS notification_policies (kind VARCHAR(30) PRIMARY KEY, title_template VARCHAR(220) NOT NULL DEFAULT '{title}', body_template TEXT NOT NULL DEFAULT '{body}', in_app_enabled BOOLEAN NOT NULL DEFAULT TRUE, email_enabled BOOLEAN NOT NULL DEFAULT FALSE, push_enabled BOOLEAN NOT NULL DEFAULT TRUE, version INTEGER NOT NULL DEFAULT 1, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-        "INSERT INTO notification_policies (kind, title_template, body_template, in_app_enabled, email_enabled, push_enabled, version, updated_at) VALUES ('INFO', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('MATCH', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('APPLICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('INVITATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('ATTENDANCE', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('VERIFICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP) ON CONFLICT (kind) DO NOTHING",
+        "INSERT INTO notification_policies (kind, title_template, body_template, in_app_enabled, email_enabled, push_enabled, version, updated_at) VALUES ('INFO', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('MATCH', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('FOLLOWED_EMPLOYER', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('APPLICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('INVITATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('ATTENDANCE', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP), ('VERIFICATION', '{title}', '{body}', TRUE, FALSE, TRUE, 1, CURRENT_TIMESTAMP) ON CONFLICT (kind) DO NOTHING",
         "INSERT INTO employer_plans (id, code, name, post_limit, price, description, is_active, created_at) SELECT '00000000-0000-0000-0000-000000000001', 'FREE', 'Miễn phí', 5, 0, '5 lượt đăng ca miễn phí tổng cộng', TRUE, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM employer_plans WHERE code = 'FREE')",
         "UPDATE employer_plans SET description = '5 lượt đăng ca miễn phí tổng cộng' WHERE code = 'FREE' AND description = ''",
         "INSERT INTO employer_subscriptions (employer_id, plan_id, posts_used, free_posts_used, started_at) SELECT e.user_id, p.id, COUNT(s.id), COUNT(s.id), CURRENT_TIMESTAMP FROM employers e CROSS JOIN employer_plans p LEFT JOIN shifts s ON s.employer_id = e.user_id WHERE p.code = 'FREE' AND NOT EXISTS (SELECT 1 FROM employer_subscriptions q WHERE q.employer_id = e.user_id) GROUP BY e.user_id, p.id",
@@ -898,7 +899,28 @@ def employer_public_profile(employer_id: uuid.UUID, user: models.User = Depends(
     if not employer: raise HTTPException(404, 'Không tìm thấy hồ sơ doanh nghiệp')
     shifts = db.query(models.JobShift).filter(models.JobShift.employer_id == employer_id).order_by(models.JobShift.start_time.desc()).all()
     reviews = db.query(models.Review).join(models.Application).join(models.JobShift).filter(models.JobShift.employer_id == employer_id, models.Review.reviewer_role == 'STUDENT').order_by(models.Review.created_at.desc()).all()
-    return {'id': str(employer.user_id), 'name': employer.company_name, 'address': employer.address, 'phone': employer.phone, 'verified': employer.is_verified, 'rating': employer.average_rating, 'history': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'status': s.status, 'start_time': s.start_time.isoformat()} for s in shifts], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.isoformat()} for r in reviews]}
+    following = db.query(models.EmployerFollow).filter_by(student_id=user.id, employer_id=employer_id).first() is not None
+    return {'id': str(employer.user_id), 'name': employer.company_name, 'address': employer.address, 'phone': employer.phone, 'verified': employer.is_verified, 'rating': employer.average_rating, 'following': following, 'history': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'status': s.status, 'start_time': s.start_time.replace(tzinfo=timezone.utc).isoformat()} for s in shifts], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.replace(tzinfo=timezone.utc).isoformat()} for r in reviews]}
+
+@app.put('/api/employers/{employer_id}/follow')
+def follow_employer(employer_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    employer = db.query(models.Employer).join(models.User, models.User.id == models.Employer.user_id).filter(models.Employer.user_id == employer_id, models.User.is_active.is_(True), models.User.deleted_at.is_(None)).first()
+    if not employer: raise HTTPException(404, 'Không tìm thấy doanh nghiệp')
+    if not db.query(models.EmployerFollow).filter_by(student_id=user.id, employer_id=employer_id).first():
+        db.add(models.EmployerFollow(student_id=user.id, employer_id=employer_id))
+        db.commit()
+    return {'following': True}
+
+@app.delete('/api/employers/{employer_id}/follow')
+def unfollow_employer(employer_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    db.query(models.EmployerFollow).filter_by(student_id=user.id, employer_id=employer_id).delete()
+    db.commit()
+    return {'following': False}
+
+@app.get('/api/student/followed-employers')
+def followed_employers(user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
+    rows = db.query(models.EmployerFollow, models.Employer).join(models.Employer, models.Employer.user_id == models.EmployerFollow.employer_id).filter(models.EmployerFollow.student_id == user.id).order_by(models.EmployerFollow.created_at.desc()).all()
+    return [{'id': str(employer.user_id), 'name': employer.company_name, 'rating': employer.average_rating} for _, employer in rows]
 
 @app.put('/api/student/location')
 def update_student_location(req: LocationUpdate, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
@@ -1263,12 +1285,16 @@ def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db:
     if plan.code == 'FREE':
         subscription.free_posts_used += 1
     students = db.query(models.Student).options(selectinload(models.Student.schedules)).all()
+    follower_ids = {follow.student_id for follow in db.query(models.EmployerFollow).filter_by(employer_id=user.id).all()}
     matched = 0
     for student in students:
         result = match_student_shift(student, shift)
         if result['score'] >= 80:
             matched += 1
-            db.add(build_notification(db, user_id=student.user_id, shift_id=shift.id, title='Có ca làm phù hợp', body=f'{shift.title} phù hợp {result["score"]}% với hồ sơ và lịch của bạn.', kind='MATCH'))
+            if student.user_id not in follower_ids:
+                db.add(build_notification(db, user_id=student.user_id, shift_id=shift.id, title='Có ca làm phù hợp', body=f'{shift.title} phù hợp {result["score"]}% với hồ sơ và lịch của bạn.', kind='MATCH'))
+    for student_id in follower_ids:
+        db.add(build_notification(db, user_id=student_id, shift_id=shift.id, title=f'{user.employer_profile.company_name} vừa đăng ca mới', body=f'{shift.title} tại {shift.location}. Xem thời gian và điều kiện trước khi ứng tuyển.', kind='FOLLOWED_EMPLOYER'))
     db.commit(); db.refresh(shift)
     return {**shift_dict(shift), 'matched_students': matched}
 
