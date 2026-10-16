@@ -70,6 +70,9 @@ def test_verified_employer_invites_and_decides_applications(verified_register):
         assert client.post(invitation_path, headers=employer, json={'student_id': student_id}).status_code == 409
         detail = client.get('/api/shifts/' + first_id, headers=student).json()
         assert detail['invitation_id'] == invitation.json()['id'] and detail['applied'] is False
+        study = client.post('/api/schedules', headers=student, json={'title': 'Lịch học đã khai báo', 'type': 'STUDY', 'start_time': detail['start_time'], 'end_time': detail['end_time']})
+        assert study.status_code == 201, study.text
+        assert client.get('/api/shifts/' + first_id, headers=student).json()['available'] is False
         respond_path = '/api/applications/' + invitation.json()['id'] + '/respond'
         assert client.patch(respond_path, headers=other, json={'accept': True}).status_code == 403
         accepted = client.patch(respond_path, headers=student, json={'accept': True})
