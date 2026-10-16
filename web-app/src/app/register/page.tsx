@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/Branding';
 import OtpCodeInput from '@/components/OtpCodeInput';
 import styles from './register.module.css';
 
@@ -86,8 +87,7 @@ export default function RegisterPage() {
     <main className="auth-page">
       <section className={styles.card} aria-labelledby="register-title">
         <Link href="/" className={styles.brand} aria-label="Về trang chủ EduShift">
-          <span className="mark">E</span>
-          <span className="brand-name">Edu<span>Shift</span></span>
+          <BrandLogo />
         </Link>
 
         <header className={styles.header}>

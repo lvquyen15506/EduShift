@@ -5,6 +5,7 @@ import LandingSlider from './landing-slider';
 import PublicShifts from './public-shifts';
 import LandingPricing from './landing-pricing';
 import ChatWidget from '@/components/ChatWidget';
+import { BrandLogo } from '@/components/Branding';
 
 const steps = [
   { n: '01', title: 'Đồng bộ lịch học', body: 'Đưa thời khóa biểu vào EduShift để thấy rõ những khoảng thời gian bạn có thể đi làm.' },
@@ -16,7 +17,7 @@ export default function Home() {
   return <main className="landing" id="top">
     <LandingMotion />
     <header className="landing-header">
-      <Link href="/" className="landing-brand" aria-label="EduShift - Trang chủ"><span className="landing-brand-mark">E<span>✦</span></span><strong>Edu<span>Shift</span></strong></Link>
+      <Link href="/" className="landing-brand" aria-label="EduShift - Trang chủ"><BrandLogo /></Link>
       <nav aria-label="Điều hướng chính"><a href="#loi-ich">Lợi ích</a><a href="#cach-hoat-dong">Cách hoạt động</a><a href="#doanh-nghiep">Doanh nghiệp</a><a href="#bang-gia">Bảng giá</a></nav>
       <div className="landing-head-actions"><Link href="/login">Đăng nhập</Link><Link href="/register" className="landing-button landing-button-small">Bắt đầu ngay <span aria-hidden="true">↗</span></Link></div>
     </header>
@@ -64,7 +65,7 @@ export default function Home() {
     <section className="landing-employer" id="doanh-nghiep"><div className="landing-employer-image landing-reveal"><Image src="/landing/team.jpg" alt="Nhóm làm việc cùng trao đổi và lên kế hoạch" fill sizes="(max-width: 800px) 100vw, 45vw" /></div><div className="landing-employer-copy landing-reveal"><span className="landing-label">DÀNH CHO DOANH NGHIỆP</span><h2>Ca trống cần người.<br /><em>Người phù hợp có mặt.</em></h2><p>Đăng ca, xem ứng viên cùng mức độ phù hợp về thời gian và kỹ năng, rồi chọn người cho đội của bạn.</p><Link href="/register" className="landing-button">Bắt đầu tuyển dụng <span aria-hidden="true">↗</span></Link></div></section>
 
     <section className="landing-final landing-reveal"><span className="landing-label">BẮT ĐẦU TỪ HÔM NAY</span><h2>Một lịch rõ ràng.<br /><em>Nhiều cơ hội mở ra.</em></h2><p>Tạo tài khoản EduShift và tìm ca làm phù hợp với nhịp học của bạn.</p><Link href="/register" className="landing-button">Khám phá ca làm <span aria-hidden="true">↗</span></Link></section>
-    <footer className="landing-footer"><div><Link href="/" className="landing-brand"><span className="landing-brand-mark">E<span>✦</span></span><strong>Edu<span>Shift</span></strong></Link><small>© 2026 EduShift · Kết nối việc làm theo lịch học.</small></div><nav aria-label="Liên kết cuối trang"><div><strong>Sinh viên</strong><Link href="/register">Tạo tài khoản</Link><Link href="/login">Tìm ca làm</Link></div><div><strong>Doanh nghiệp</strong><Link href="/pricing">Bảng giá</Link><Link href="/register">Đăng ca</Link></div><div><strong>Hỗ trợ & pháp lý</strong><Link href="/support">Hỗ trợ, liên hệ</Link><Link href="/terms">Điều khoản</Link><Link href="/privacy">Riêng tư</Link></div></nav><a href="#top">Lên đầu trang ↑</a></footer>
+    <footer className="landing-footer"><div><Link href="/" className="landing-brand"><BrandLogo /></Link><small>© 2026 EduShift · Kết nối việc làm theo lịch học.</small></div><nav aria-label="Liên kết cuối trang"><div><strong>Sinh viên</strong><Link href="/register">Tạo tài khoản</Link><Link href="/login">Tìm ca làm</Link></div><div><strong>Doanh nghiệp</strong><Link href="/pricing">Bảng giá</Link><Link href="/register">Đăng ca</Link></div><div><strong>Hỗ trợ & pháp lý</strong><Link href="/support">Hỗ trợ, liên hệ</Link><Link href="/terms">Điều khoản</Link><Link href="/privacy">Riêng tư</Link></div></nav><a href="#top">Lên đầu trang ↑</a></footer>
     <ChatWidget />
   </main>;
 }

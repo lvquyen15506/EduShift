@@ -1,0 +1,7 @@
+.brand-image{display:block;width:54px;height:54px;flex:none;object-fit:contain;border-radius:50%}
+.auth-page .brand-image{width:96px;height:96px}
+.landing-brand .brand-image{width:64px;height:64px}
+.landing-footer .landing-brand .brand-image{width:58px;height:58px}
+.employer-sidebar-brand{align-items:flex-start;flex-direction:column;gap:4px}
+.employer-sidebar-brand small{padding:0;background:transparent;font-size:10px;font-weight:750;letter-spacing:1.3px;color:var(--muted)}
+@media(max-width:600px){.brand-image{width:46px;height:46px}.landing-brand .brand-image{width:52px;height:52px}.auth-page .brand-image{width:88px;height:88px}}

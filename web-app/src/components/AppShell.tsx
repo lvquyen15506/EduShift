@@ -6,6 +6,7 @@ import { AppstoreOutlined, BellOutlined, CalendarOutlined, CheckCircleOutlined, 
 import { Avatar, Badge, Button, Divider, Drawer, Popover } from 'antd';
 import { api } from '@/lib/api';
 import ChatWidget from '@/components/ChatWidget';
+import { BrandLogo } from '@/components/Branding';
 
 type Role = 'STUDENT' | 'EMPLOYER' | 'ADMIN';
 type User = { role: Role; username?: string; email?: string; avatar_data?: string | null; profile?: { full_name?: string; company_name?: string } };
@@ -87,12 +88,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   </div>;
   return <div className={'product-shell role-' + role.toLowerCase()}>
     {role === 'EMPLOYER' && <aside className="employer-sidebar">
-      <Link href="/dashboard" className="brand employer-sidebar-brand" aria-label="EduShift"><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span><small>BUSINESS PORTAL</small></span></Link>
+      <Link href="/dashboard" className="brand employer-sidebar-brand" aria-label="EduShift"><BrandLogo /><small>BUSINESS PORTAL</small></Link>
       <nav className="employer-sidebar-nav" aria-label="Điều hướng doanh nghiệp">{navigation.EMPLOYER.map(link => <Link key={link.href} className={isActive(link.href) ? 'active' : ''} aria-current={isActive(link.href) ? 'page' : undefined} href={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav>
     </aside>}
     <header className="product-topbar">
       <Button type="text" className="mobile-menu-button" icon={<MenuOutlined />} aria-label="Mở menu điều hướng" aria-expanded={mobileMenuOpen} aria-controls="mobile-product-navigation" onClick={() => setMobileMenuOpen(true)} />
-      <Link href={home[role]} className="brand" aria-label="EduShift"><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span></span></Link>
+      <Link href={home[role]} className="brand" aria-label="EduShift"><BrandLogo /></Link>
       <span className="workspace-label">{role === 'STUDENT' ? 'Không gian sinh viên' : role === 'ADMIN' ? 'Bảng điều hành' : 'Không gian doanh nghiệp'}</span>
       <nav className="product-nav" aria-label="Điều hướng chính">{navigation[role].map(link => <Link key={link.href} className={isActive(link.href) ? 'active' : ''} aria-current={isActive(link.href) ? 'page' : undefined} href={link.href}><span>{link.icon}</span>{link.label}</Link>)}</nav>
       <div className="product-actions">
@@ -100,7 +101,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Popover trigger={['hover', 'click']} placement="bottomRight" arrow={false} content={accountPanel}><button type="button" className="user-chip account-trigger" aria-label="Mở menu tài khoản" aria-haspopup="true"><Avatar size={36} src={user?.avatar_data || undefined} style={{ backgroundColor: '#FFE0EA', color: '#B10E6B', fontWeight: 700 }}>{initials}</Avatar><span className="account-trigger-text"><b>{name}</b><small>{role === 'ADMIN' ? 'Quản trị viên' : role === 'STUDENT' ? 'Sinh viên' : 'Doanh nghiệp'}</small></span><DownOutlined className="account-chevron" /></button></Popover>
       </div>
     </header>
-    <Drawer className="product-mobile-drawer" title={<Link href={home[role]} className="brand" onClick={() => setMobileMenuOpen(false)}><span className="mark">E</span><span className="brand-name">Edu<span>Shift</span></span></Link>} placement="left" size={320} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
+    <Drawer className="product-mobile-drawer" title={<Link href={home[role]} className="brand" onClick={() => setMobileMenuOpen(false)}><BrandLogo /></Link>} placement="left" size={320} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
       <span className="mobile-menu-caption">{role === 'STUDENT' ? 'Không gian sinh viên' : role === 'ADMIN' ? 'Bảng điều hành' : 'Không gian doanh nghiệp'}</span>
       <nav id="mobile-product-navigation" className="mobile-product-nav" aria-label="Điều hướng mobile">{navigation[role].map(link => <Link key={link.href} href={link.href} className={isActive(link.href) ? 'active' : ''} aria-current={isActive(link.href) ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span>{link.icon}</span>{link.label}</Link>)}<Link href="/notifications" className={pathname === '/notifications' ? 'active' : ''} aria-current={pathname === '/notifications' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span><BellOutlined /></span>Thông báo{unread > 0 && <Badge count={unread} size="small" />}</Link><Link href="/profile" className={pathname === '/profile' ? 'active' : ''} aria-current={pathname === '/profile' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}><span><UserOutlined /></span>Hồ sơ cá nhân</Link></nav>
       <button className="mobile-menu-logout" type="button" onClick={logout}><LogoutOutlined /> Đăng xuất</button>
