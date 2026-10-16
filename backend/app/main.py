@@ -26,6 +26,7 @@ from .database import Base, engine, get_db
 from . import models
 from .email_delivery import EmailDeliveryError, send_otp_email
 from .matching import match_student_shift, utc_naive
+from .chat_advice import schedule_advice_context
 from .school_calendar import SchoolCalendarError, fetch_school_calendar
 
 Base.metadata.create_all(bind=engine)
@@ -900,7 +901,8 @@ def employer_public_profile(employer_id: uuid.UUID, user: models.User = Depends(
     shifts = db.query(models.JobShift).filter(models.JobShift.employer_id == employer_id).order_by(models.JobShift.start_time.desc()).all()
     reviews = db.query(models.Review).join(models.Application).join(models.JobShift).filter(models.JobShift.employer_id == employer_id, models.Review.reviewer_role == 'STUDENT').order_by(models.Review.created_at.desc()).all()
     following = db.query(models.EmployerFollow).filter_by(student_id=user.id, employer_id=employer_id).first() is not None
-    return {'id': str(employer.user_id), 'name': employer.company_name, 'address': employer.address, 'phone': employer.phone, 'verified': employer.is_verified, 'rating': employer.average_rating, 'following': following, 'history': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'status': s.status, 'start_time': s.start_time.replace(tzinfo=timezone.utc).isoformat()} for s in shifts], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.replace(tzinfo=timezone.utc).isoformat()} for r in reviews]}
+    open_shifts = [s for s in shifts if s.status == 'OPEN' and s.start_time > datetime.utcnow()]
+    return {'id': str(employer.user_id), 'name': employer.company_name, 'address': employer.address, 'phone': employer.phone, 'verified': employer.is_verified, 'rating': employer.average_rating, 'following': following, 'open_shifts': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'start_time': s.start_time.replace(tzinfo=timezone.utc).isoformat(), 'end_time': s.end_time.replace(tzinfo=timezone.utc).isoformat(), 'hourly_rate': s.hourly_rate} for s in sorted(open_shifts, key=lambda item: item.start_time)], 'history': [{'id': str(s.id), 'title': s.title, 'location': s.location, 'status': s.status, 'start_time': s.start_time.replace(tzinfo=timezone.utc).isoformat()} for s in shifts], 'reviews': [{'rating': r.rating, 'comment': r.comment, 'created_at': r.created_at.replace(tzinfo=timezone.utc).isoformat()} for r in reviews]}
 
 @app.put('/api/employers/{employer_id}/follow')
 def follow_employer(employer_id: uuid.UUID, user: models.User = Depends(require_role('STUDENT')), db: Session = Depends(get_db)):
@@ -1210,7 +1212,11 @@ def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict
               'Với câu hỏi về sản phẩm, chỉ dùng thông tin trong CONTEXT; nếu không đủ dữ liệu hãy nói chưa có thông tin và hướng người dùng đăng ký hoặc liên hệ hỗ trợ. '
               'Với lời chào hoặc trò chuyện đời thường không liên quan sản phẩm, hãy trả lời tự nhiên, lịch sự và không bịa thông tin về EduShift. '
               'Không dùng dấu ** hoặc markdown chưa đóng; khi hướng dẫn thao tác hãy viết đủ các bước và không kết thúc giữa câu. '
-              'Không tự bịa lương, địa chỉ, chính sách hay cam kết tuyển dụng. Khi có ca phù hợp, nêu đúng tên ca, doanh nghiệp và địa điểm.')
+              'Không tự bịa lương, địa chỉ, chính sách hay cam kết tuyển dụng. Khi có ca phù hợp, nêu đúng tên ca, doanh nghiệp và địa điểm. '
+              'Dữ liệu my_schedule và advised_shift là lịch riêng của sinh viên đã xác thực và ca đang tuyển trong 14 ngày tới, theo múi giờ Việt Nam. '
+              'Khi tư vấn lịch, so sánh giờ học, giờ làm đã nhận, thời gian di chuyển và nghỉ ngơi; ưu tiên ca có score cao, giải thích warnings. '
+              'Nếu lịch rất dày hoặc trùng, nói rõ rủi ro và gợi ý ca khác. Chỉ tư vấn; không tuyên bố sinh viên bị cấm ứng tuyển. '
+              'Nếu chưa có lịch học, nói rõ cần nhập hoặc đồng bộ lịch để tư vấn chính xác hơn.')
     prior_history = history[-8:]
     if prior_history and prior_history[-1].get('role') == 'user' and prior_history[-1].get('content', '').strip() == message.strip():
         prior_history = prior_history[:-1]
@@ -1234,18 +1240,64 @@ def _gemini_chat(message: str, history: list[dict[str, str]], context: list[dict
             continue
     return None
 
+@app.get('/api/chat/history')
+def chat_history(user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
+    rows = db.query(models.ChatMessage).filter(models.ChatMessage.user_id == user.id).order_by(models.ChatMessage.created_at.desc(), models.ChatMessage.id.desc()).limit(100).all()
+    return [{'role': item.role, 'content': item.content} for item in reversed(rows)]
+
+
+@app.delete('/api/chat/history', status_code=204)
+def clear_chat_history(user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):
+    db.query(models.ChatMessage).filter(models.ChatMessage.user_id == user.id).delete()
+    db.commit()
+
+
 @app.post('/api/chat')
 def chat(req: ChatRequest, authorization: Optional[str] = Header(default=None), db: Session = Depends(get_db)):
     user = current_user(authorization, db)
-    history_context = ' '.join(item.get('content', '') for item in req.history[-8:] if item.get('content'))
+    if authorization and not user:
+        raise HTTPException(401, 'Token không hợp lệ hoặc đã hết hạn')
+    if user:
+        previous = db.query(models.ChatMessage).filter(models.ChatMessage.user_id == user.id).order_by(models.ChatMessage.created_at.desc(), models.ChatMessage.id.desc()).limit(8).all()
+        history = [{'role': item.role, 'content': item.content} for item in reversed(previous)]
+    else:
+        history = req.history[-8:]
+    history_context = ' '.join(item.get('content', '') for item in history if item.get('content'))
     conversation_text = f'{history_context} {req.message}'
     context = _chat_sources(db, conversation_text)
-    answer = _gemini_chat(req.message, req.history, context)
+    schedule_terms = ['lịch', 'ca', 'làm', 'rảnh', 'tư vấn', 'nghỉ', 'thời gian']
+    is_schedule_question = any(term in conversation_text.lower() for term in schedule_terms)
+    if user and user.role == 'STUDENT' and is_schedule_question:
+        now = datetime.utcnow()
+        schedules = db.query(models.Schedule).filter(models.Schedule.student_id == user.id, models.Schedule.end_time > now).order_by(models.Schedule.start_time).limit(100).all()
+        shifts = (db.query(models.JobShift).join(models.JobShift.employer).options(joinedload(models.JobShift.employer))
+                  .filter(models.JobShift.status == 'OPEN', models.JobShift.start_time > now,
+                          models.JobShift.start_time < now + timedelta(days=14), models.Employer.is_verified.is_(True))
+                  .order_by(models.JobShift.start_time).limit(100).all())
+        context.extend(schedule_advice_context(schedules, shifts, now))
+    answer = _gemini_chat(req.message, history, context)
     if answer and _chat_is_guide_request(conversation_text) and len(answer) < 220:
         answer = None
     mode = 'gemini' if answer else 'local'
     fallback_message = req.message if len(_chat_tokens(req.message)) > 1 else conversation_text
-    return {'answer': answer or _local_chat_answer(fallback_message, context, bool(user)), 'mode': mode, 'authenticated': bool(user), 'sources': context}
+    if not answer and user and user.role == 'STUDENT' and is_schedule_question:
+        advised = [item for item in context if item.get('type') == 'advised_shift']
+        planned = [item for item in context if item.get('type') == 'my_schedule']
+        if advised:
+            lines = ['Dựa trên lịch học và ca đã nhận của bạn, mình gợi ý:'] if planned else ['Bạn chưa có lịch học/làm trong 14 ngày tới; hãy nhập lịch để tư vấn chính xác hơn. Một số ca đang tuyển:']
+            for item in advised[:3]:
+                caution = '; '.join(item['warnings']) if item['warnings'] else 'Chưa thấy trùng lịch; hãy tính thêm thời gian di chuyển và nghỉ'
+                lines.append(f"• {item['title']} tại {item['company_name']}: {item['start_time']} đến {item['end_time']}. {caution}.")
+            lines.append('Đây là gợi ý để bạn cân nhắc, không giới hạn quyền ứng tuyển của bạn.')
+            answer = '\n'.join(lines)
+        elif planned:
+            answer = 'Mình đã đọc lịch của bạn nhưng chưa thấy ca đang tuyển trong 14 ngày tới. Bạn có thể xem lại sau hoặc cho mình biết khung giờ mong muốn.'
+    final_answer = answer or _local_chat_answer(fallback_message, context, bool(user))
+    if user:
+        db.add(models.ChatMessage(user_id=user.id, role='user', content=req.message))
+        db.add(models.ChatMessage(user_id=user.id, role='assistant', content=final_answer))
+        db.commit()
+    return {'answer': final_answer, 'mode': mode, 'authenticated': bool(user), 'sources': context}
 
 @app.post('/api/shifts', status_code=201)
 def create_shift(req: ShiftCreate, user: models.User = Depends(user_or_401), db: Session = Depends(get_db)):

@@ -39,6 +39,8 @@ def test_followed_employer_new_shift_notifies_once_and_unfollow_stops_it(verifie
             return response.json()['id']
 
         first_id = post_shift(marker + ' first', 0)
+        profile = client.get('/api/employers/' + employer_id + '/profile', headers=student_token).json()
+        assert [item['id'] for item in profile['open_shifts']] == [first_id]
         notices = client.get('/api/notifications', headers=student_token).json()
         followed_notices = [item for item in notices if item['kind'] == 'FOLLOWED_EMPLOYER']
         assert len(followed_notices) == 1 and followed_notices[0]['shift_id'] == first_id
