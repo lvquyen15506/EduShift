@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 
-def test_accepted_shift_appears_in_calendar_and_blocks_overbooking(verified_register):
+def test_accepted_shift_appears_in_calendar_and_student_can_choose_overlap(verified_register):
     try:
         from app.database import SessionLocal, engine
         from app.models import User, Employer
@@ -98,7 +98,10 @@ def test_accepted_shift_appears_in_calendar_and_blocks_overbooking(verified_regi
         assert conflicting_application.status_code == 201, conflicting_application.text
         assert conflicting_application.json()['match_score'] == 0
         assert call('POST', '/api/applications', '_student_a', {'shift_id': second_id}).status_code == 409
-        assert call('PATCH', '/api/applications/' + conflicting_application.json()['application_id'] + '/accept', '_employer').status_code == 409
+        conflicting_accepted = call('PATCH', '/api/applications/' + conflicting_application.json()['application_id'] + '/accept', '_employer')
+        assert conflicting_accepted.status_code == 200, conflicting_accepted.text
+        assert conflicting_accepted.json()['status'] == 'ACCEPTED'
+        assert len([item for item in call('GET', '/api/schedules', '_student_a').json() if item['type'] == 'WORK']) == 2
     finally:
         session = SessionLocal()
         try:

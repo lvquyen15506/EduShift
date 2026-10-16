@@ -1525,9 +1525,6 @@ def accept_application(application_id: uuid.UUID, user: models.User = Depends(re
     accepted = db.query(models.Application).filter(models.Application.shift_id == shift.id, models.Application.status == 'ACCEPTED').count()
     if accepted >= shift.required_workers:
         raise HTTPException(409, 'Ca làm đã đủ người')
-    student = db.query(models.Student).options(selectinload(models.Student.schedules)).filter(models.Student.user_id == application.student_id).first()
-    if not match_student_shift(student, shift)['available']:
-        raise HTTPException(409, 'Lịch sinh viên đã thay đổi, không thể nhận ca')
     application.status = 'ACCEPTED'
     db.add(models.Schedule(student_id=application.student_id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
     db.add(build_notification(db, user_id=application.student_id, shift_id=shift.id, title='Bạn đã được nhận vào ca làm', body=f'Ca {shift.title} đã được xếp vào lịch của bạn.', kind='APPLICATION'))
@@ -1619,9 +1616,6 @@ def respond_invitation(application_id: uuid.UUID, req: InvitationResponse, user:
         accepted = db.query(models.Application).filter_by(shift_id=shift.id, status='ACCEPTED').count()
         if accepted >= shift.required_workers:
             raise HTTPException(409, 'Ca đã đủ người')
-        student = db.query(models.Student).options(selectinload(models.Student.schedules)).filter(models.Student.user_id == user.id).first()
-        if not match_student_shift(student, shift)['available']:
-            raise HTTPException(409, 'Lịch của bạn đã thay đổi, không thể nhận ca')
         application.status = 'ACCEPTED'
         db.add(models.Schedule(student_id=user.id, application_id=application.id, title=f'Ca làm: {shift.title}', type='WORK', source='SHIFT', start_time=shift.start_time, end_time=shift.end_time))
         if accepted + 1 >= shift.required_workers:
